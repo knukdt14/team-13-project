@@ -76,8 +76,8 @@
 
 | 구분 | 기술 | 선정 이유 |
 |---|---|---|
-| Frontend | **Flask** + Jinja2 | Module 13 Lecture 1 정식 커리큘럼. 지도·파일첨부 등 커스텀 인터랙션 자유도 확보 |
-| UI | HTML / CSS / Vanilla JS | 프레임워크 없이 DOM을 직접 제어. 애니메이션·이벤트를 원하는 대로 구현 |
+| Frontend | **React** + Vite | 채팅·지도의 상태 변화를 선언적으로 관리. 컴포넌트 단위 분리 |
+| 라우팅 | React Router | 챗봇 / 지도 / 문서 페이지 전환 |
 | 지도 | **Kakao Maps JS SDK** | 폴리곤 오버레이, hover 이벤트, 애니메이션 확대 지원 |
 | Backend | **FastAPI** + Uvicorn | 평가 항목 명시. Pydantic 기반 자동 OpenAPI 문서 |
 | 검증/계약 | **Pydantic** | 팀 간 인터페이스 계약을 코드로 고정 |
@@ -90,14 +90,15 @@
 | 배포 | **Docker** / Docker Hub / **Hugging Face Spaces** | Module 14 평가 항목 |
 | 협업 | **Git / GitHub** (Issue · Branch · PR) | Module 14 평가 항목 |
 
-### 프론트엔드로 Flask를 선택한 이유
+### 프론트엔드로 React를 선택한 이유
 
-Module 13 평가 항목은 `Frontend / Streamlit` 으로 표기되어 있으나, 실제 평가 기준 문구는 *"기본 User Interface 설계가 제대로 동작하는가? 기존 수업에서 다루지 않은 UI 컴포넌트를 추가하고 기능 구현을 완성하였는가?"* 로 특정 프레임워크를 요구하지 않는다. Flask와 Jinja2는 Module 13 Lecture 1에서 라우팅·템플릿·매크로·정적파일·세션까지 정식으로 다룬 범위다.
+Module 13 평가 항목은 `Frontend / Streamlit` 으로 표기되어 있으나, 실제 평가 기준 문구는 *"기본 User Interface 설계가 제대로 동작하는가? 기존 수업에서 다루지 않은 UI 컴포넌트를 추가하고 기능 구현을 완성하였는가?"* 로 특정 프레임워크를 요구하지 않는다.
 
-기술적 이유는 두 가지다.
+세 가지 이유로 React를 택했다.
 
-1. **지도 인터랙션** — hover 색상 전환, 클릭 시 애니메이션 확대, 슬라이드 패널은 DOM과 CSS를 직접 제어해야 자연스럽게 나온다. Streamlit은 상호작용마다 스크립트를 처음부터 다시 실행하므로 연속 애니메이션에 불리하다.
-2. **파일 첨부 UX** — 입력창 옆 `+` 버튼으로 첨부하는 방식은 커스텀 DOM 제어가 필요하다.
+1. **스트리밍 채팅** — 토큰이 도착할 때마다 메시지 목록이 갱신된다. 상태를 바꾸면 화면이 따라오는 React 모델이 DOM을 직접 조작하는 방식보다 명확하고, 메시지가 쌓여도 코드가 복잡해지지 않는다.
+2. **지도 인터랙션** — hover 색상 전환, 클릭 시 애니메이션 확대, 슬라이드 패널은 지도 상태와 패널 상태를 함께 관리해야 한다. 커스텀 훅으로 묶으면 지도 로직과 화면이 분리된다.
+3. **배포 구조** — Hugging Face Docker Space는 **컨테이너를 하나만** 실행한다. React를 정적 파일로 빌드해 FastAPI가 서빙하면 프로세스가 하나로 끝난다. 서버 사이드 템플릿 방식이라면 웹 서버와 API 서버 두 프로세스를 한 컨테이너에 묶어야 한다.
 
 > 평가 항목 표기가 Streamlit인 만큼, 착수 전 담당 교수에게 프레임워크 변경 가능 여부를 확인한다.
 
@@ -108,21 +109,16 @@ Module 13 평가 항목은 `Frontend / Streamlit` 으로 표기되어 있으나,
 ```
                      브라우저
 ┌──────────────────────────────────────────────┐
-│  HTML · CSS · JS                             │
+│  React SPA                        [이수민]    │
 │  ├ 💬 챗봇  ├ 🗺 지도  ├ 📚 문서              │
 │  └ 사이드바: 내 조건 입력                      │
-└───────┬──────────────────────┬───────────────┘
-        │ 페이지 요청           │ fetch · SSE (CORS)
-        ▼                      │
-┌───────────────────┐          │
-│ Flask  :5000      │          │
-│ 라우팅 · 템플릿    │          │
-│      [이수민]      │          │
-└───────────────────┘          │
-                               ▼
+└──────────────────┬───────────────────────────┘
+                   │ fetch · SSE  →  /api/*
+                   ▼
 ┌──────────────────────────────────────────────┐
-│  FastAPI Backend  :8000           [최성호]    │
-│  routers/  schemas.py  db.py                 │
+│  FastAPI  :8000                   [최성호]    │
+│  /api/*  →  routers/  schemas.py  db.py      │
+│  /       →  StaticFiles (빌드된 SPA, 배포 시) │
 └───────┬──────────────────────┬───────────────┘
         ▼                      ▼
 ┌───────────────────┐  ┌───────────────────────┐
@@ -137,15 +133,34 @@ Module 13 평가 항목은 `Frontend / Streamlit` 으로 표기되어 있으나,
         └────────────────────┘
 ```
 
-### Flask는 화면만, 데이터는 브라우저가 직접
+### 개발 환경과 배포 환경이 다르다
 
-Flask는 **페이지 렌더링만** 담당하고, 정책 검색·챗봇 응답 등 데이터는 **브라우저 JS가 FastAPI를 직접 호출**한다.
+| | 개발 | 배포 |
+|---|---|---|
+| 프론트 | Vite 개발 서버 `:5173` | `npm run build` → 정적 파일 |
+| 서빙 | Vite가 `/api` 요청을 `:8000`으로 프록시 | FastAPI가 `StaticFiles`로 SPA 서빙 |
+| CORS | **불필요** (프록시가 같은 출처로 만듦) | **불필요** (같은 서버) |
+| 프로세스 | 2개 (Vite + Uvicorn) | 1개 (Uvicorn) |
 
-Flask가 FastAPI를 서버 사이드로 프록시하면 FastAPI가 사실상 내부 함수 호출처럼 되어, Swagger 문서와 실제 사용 경로가 어긋난다. 브라우저가 직접 호출하면 `/docs`에 정의된 API가 곧 실제로 쓰이는 API가 되어 REST 설계가 그대로 드러난다.
+Vite 프록시 덕분에 개발 중에도 CORS 설정이 필요 없다. `vite.config.js`에 다음을 넣는다.
 
-- Flask `:5000` → 페이지(HTML) 응답
-- FastAPI `:8000` → 데이터(JSON · SSE) 응답
-- 포트가 다르므로 **교차 출처**가 되어 백엔드에 `CORSMiddleware` 필요
+```js
+server: {
+  proxy: { '/api': 'http://localhost:8000' }
+}
+```
+
+### API 경로는 반드시 `/api` 로 시작한다
+
+배포 시 FastAPI가 `/` 에서 SPA를 서빙하므로, API 라우트가 접두사 없이 `/ask` 같은 형태면 SPA 라우팅과 충돌한다. 모든 엔드포인트는 `/api` 아래에 둔다.
+
+```python
+app.include_router(chat_router, prefix="/api")
+# ... 모든 라우터 등록 후, 맨 마지막에
+app.mount("/", StaticFiles(directory="dist", html=True), name="spa")
+```
+
+마운트 순서가 중요하다. `StaticFiles` 마운트는 **모든 API 라우터 등록 이후**에 와야 한다.
 
 ### 데이터 파이프라인 두 갈래
 
@@ -166,35 +181,43 @@ Flask가 FastAPI를 서버 사이드로 프록시하면 FastAPI가 사실상 내
 
 ```
 team-13-project/
+├── frontend/                        ← 이수민
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js               # /api 프록시 설정
+│   ├── .env.example                 # VITE_* 환경변수
+│   └── src/
+│       ├── main.jsx
+│       ├── App.jsx                  # 라우터 · 레이아웃
+│       ├── pages/
+│       │   ├── ChatPage.jsx         # F1
+│       │   ├── MapPage.jsx          # F3
+│       │   └── DocumentsPage.jsx    # F2
+│       ├── components/
+│       │   ├── ChatWindow.jsx
+│       │   ├── MessageBubble.jsx
+│       │   ├── AttachMenu.jsx       # + 버튼 첨부 메뉴
+│       │   ├── ProfilePanel.jsx     # 조건 입력
+│       │   ├── SourceCard.jsx       # 출처 카드
+│       │   ├── KakaoMap.jsx         # 지도 + 폴리곤
+│       │   └── RegionPanel.jsx      # 슬라이드 패널
+│       ├── hooks/
+│       │   ├── useChatStream.js     # SSE 수신
+│       │   ├── useProfile.js        # localStorage 영속화
+│       │   └── useKakaoMap.js       # SDK 로드 · 이벤트
+│       ├── api/
+│       │   ├── client.js            # fetch 래퍼
+│       │   └── mock.js              # MOCK 응답
+│       └── styles/
+│
 ├── src/
-│   ├── frontend/                    ← 이수민
-│   │   ├── app.py                   # Flask 앱 · Blueprint 등록
-│   │   ├── views/
-│   │   │   ├── chat.py              # F1 챗봇 페이지
-│   │   │   ├── map.py               # F3 지도 페이지
-│   │   │   └── documents.py         # F2 문서 페이지
-│   │   ├── templates/
-│   │   │   ├── base.html            # 공통 레이아웃 (상속용)
-│   │   │   ├── chat.html
-│   │   │   ├── map.html
-│   │   │   ├── documents.html
-│   │   │   └── macros/
-│   │   │       ├── message.html     # 말풍선 매크로
-│   │   │       └── source_card.html # 출처 카드 매크로
-│   │   ├── static/
-│   │   │   ├── css/  base.css · chat.css · map.css
-│   │   │   ├── js/   chat.js · map.js · profile.js · upload.js
-│   │   │   └── img/
-│   │   ├── api_client.py            # 백엔드 호출 래퍼 (MOCK 모드 포함)
-│   │   └── config.py
-│   │
 │   ├── backend/                     ← 최성호
-│   │   ├── api.py                   # FastAPI 앱, CORS, lifespan
+│   │   ├── api.py                   # FastAPI 앱 · 라우터 등록 · StaticFiles 마운트
 │   │   ├── routers/
-│   │   │   ├── chat.py              # /ask, /ask/stream
-│   │   │   ├── documents.py         # /documents
-│   │   │   ├── policies.py          # /policies (지도용)
-│   │   │   └── vision.py            # /vision (P3)
+│   │   │   ├── chat.py              # /api/ask, /api/ask/stream
+│   │   │   ├── documents.py         # /api/documents
+│   │   │   ├── policies.py          # /api/policies
+│   │   │   └── vision.py            # /api/vision (P3)
 │   │   ├── schemas.py               # ★ Pydantic 계약 (전원 참조)
 │   │   ├── db.py                    # SQLite
 │   │   └── deps.py                  # Depends 주입
@@ -221,12 +244,15 @@ team-13-project/
 ├── docs/
 │   └── presentation/                # 발표 자료
 ├── requirements.txt
-├── Dockerfile.ui
-├── Dockerfile.api
+├── Dockerfile.web                   # React 빌드 → nginx (Compose용)
+├── Dockerfile.api                   # FastAPI (Compose용)
+├── Dockerfile                       # multi-stage 통합 (HF Spaces용)
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
 ```
+
+> `frontend/` 는 `npm` 생태계를 쓰므로 `src/` 밖에 둔다. Python 패키지 경로와 섞이지 않는다.
 
 ---
 
@@ -237,14 +263,15 @@ team-13-project/
 | 이름 | 역할 | Module 13 | Module 14 | 소유 디렉터리 |
 |---|---|---|---|---|
 | **최성호** | 팀장 · Backend Engineer | 총괄·일정 관리 / FastAPI 서비스 · API 계약 설계 | Git 브랜치 전략 · PR 리뷰 운영 / `Dockerfile.api` | `src/backend/` |
-| **박준혁** | AI Engineer (LLM · RAG) | 하이브리드 검색 / 프롬프트 설계 / 자격 진단 / 생성·스트리밍 | AI 모듈 통합 · `docker-compose.yml` | `src/rag/` |
-| **김영민** | AI Engineer (Data · Ingest) | 정책 데이터 수집·정규화 / PDF 파싱 / 인덱싱 파이프라인 | Hugging Face Spaces 배포 · CI/CD | `src/ingest/` |
-| **이수민** | Frontend Engineer | Flask 라우팅·템플릿 / 카카오맵 / 챗봇 UI / 조건 입력 UX | `Dockerfile.ui` · Docker Hub push | `src/frontend/` |
+| **박준혁** | AI Engineer (LLM · RAG) | 하이브리드 검색 / 프롬프트 설계 / 자격 진단 / 생성·스트리밍 | `docker-compose.yml` · 멀티 컨테이너 통합 | `src/rag/` |
+| **김영민** | AI Engineer (Data · Ingest) | 정책 데이터 수집·정규화 / PDF 파싱 / 인덱싱 파이프라인 | HF Spaces 배포 · 통합 `Dockerfile` · CI/CD | `src/ingest/` |
+| **이수민** | Frontend Engineer | React SPA 전반 / 카카오맵 / 채팅 스트리밍 UI / 조건 입력 UX | `Dockerfile.web` · Docker Hub push | `frontend/` |
 
 ### 공동 책임
 
 - **`src/backend/schemas.py`** — 최성호가 소유하되 변경은 반드시 PR + 전원 리뷰. 이 파일이 네 사람의 작업을 연결한다.
 - **`requirements.txt`** — 각자 추가 시 PR로만. 버전을 고정(`==`)한다.
+- **`frontend/package.json`** — 이수민이 소유. 다른 사람은 건드리지 않는다.
 - **발표 자료** — 발표는 1인당 5분이므로 각자 자기 파트 슬라이드를 작성하고 최성호가 취합·통합한다.
 
 ### 업무량 분산 원칙
@@ -260,38 +287,38 @@ team-13-project/
 
 ## 7. API 명세
 
-전체 명세는 서버 기동 후 `http://localhost:8000/docs` 에서 확인한다.
+모든 엔드포인트는 **`/api` 접두사**를 갖는다. 전체 명세는 서버 기동 후 `http://localhost:8000/docs` 에서 확인한다.
 
 ### 챗봇
 
 | Method | Path | Request | Response |
 |---|---|---|---|
-| `POST` | `/ask` | `AskRequest` | `AskResponse` |
-| `GET` | `/ask/stream` | `AskRequest` (query) | SSE 토큰 스트림 |
-| `POST` | `/eligibility` | `UserProfile` | `EligibilityResponse` |
+| `POST` | `/api/ask` | `AskRequest` | `AskResponse` |
+| `GET` | `/api/ask/stream` | `AskRequest` (query) | SSE 토큰 스트림 |
+| `POST` | `/api/eligibility` | `UserProfile` | `EligibilityResponse` |
 
 ### 문서
 
 | Method | Path | Request | Response |
 |---|---|---|---|
-| `POST` | `/documents` | `list[UploadFile]` | `list[DocumentResponse]` |
-| `GET` | `/documents` | – | `list[DocumentResponse]` |
-| `DELETE` | `/documents/{doc_id}` | – | `DeleteResponse` |
+| `POST` | `/api/documents` | `list[UploadFile]` | `list[DocumentResponse]` |
+| `GET` | `/api/documents` | – | `list[DocumentResponse]` |
+| `DELETE` | `/api/documents/{doc_id}` | – | `DeleteResponse` |
 
 ### 정책 · 지도
 
 | Method | Path | Request | Response |
 |---|---|---|---|
-| `GET` | `/policies` | `region`, `category`, `page`, `size` | `PolicyListResponse` |
-| `GET` | `/policies/{policy_id}` | – | `PolicyDetail` |
-| `GET` | `/regions/summary` | – | `list[RegionSummary]` (지역별 정책 수) |
+| `GET` | `/api/policies` | `region`, `category`, `page`, `size` | `PolicyListResponse` |
+| `GET` | `/api/policies/{policy_id}` | – | `PolicyDetail` |
+| `GET` | `/api/regions/summary` | – | `list[RegionSummary]` (지역별 정책 수) |
 
 ### 세션 · 피드백
 
 | Method | Path | Request | Response |
 |---|---|---|---|
-| `GET` | `/sessions/{sid}/messages` | – | `list[Message]` |
-| `POST` | `/feedback` | `FeedbackRequest` | `OkResponse` |
+| `GET` | `/api/sessions/{sid}/messages` | – | `list[Message]` |
+| `POST` | `/api/feedback` | `FeedbackRequest` | `OkResponse` |
 
 ### 주요 스키마
 
@@ -345,9 +372,9 @@ class AskResponse(BaseModel):
 | 0-3 | 디렉터리 골격 · `requirements.txt` · `.env.example` | 최성호 |
 | 0-4 | 정책 데이터 출처 확정, 샘플 30건 확보 | 김영민 |
 | 0-5 | 브랜치 보호 규칙 · PR 템플릿 · Issue 템플릿 | 최성호 |
-| 0-6 | `api_client.py` **MOCK 모드** · `base.html` 레이아웃 | 이수민 |
+| 0-6 | Vite 프로젝트 초기화 · 라우팅 · `api/mock.js` | 이수민 |
 
-`0-6`은 프론트가 백엔드 완성을 기다리지 않게 하는 장치다. `USE_MOCK=true`면 `schemas.py` 형태의 가짜 응답을 반환하므로, 이수민은 UI를 끝까지 혼자 만들 수 있다.
+`0-6`은 프론트가 백엔드 완성을 기다리지 않게 하는 장치다. `VITE_USE_MOCK=true`면 `schemas.py` 형태의 가짜 응답을 반환하므로, 이수민은 UI를 끝까지 혼자 만들 수 있다.
 
 ### Phase 1 — 핵심 챗봇 (P0)
 
@@ -355,8 +382,8 @@ class AskResponse(BaseModel):
 |---|---|
 | 김영민 | 정책 JSON 정규화 → 메타데이터(나이·지역·소득·기간) 추출 → 청킹 → Chroma 적재 |
 | 박준혁 | 벡터 검색 + 프로필 메타 필터 → 프롬프트 → 생성 |
-| 최성호 | `POST /ask` · SQLite 대화 저장 · CORS · lifespan 모델 로딩 |
-| 이수민 | 챗봇 페이지 · 말풍선 렌더 · 조건 입력 폼 · 출처 카드 |
+| 최성호 | `POST /api/ask` · SQLite 대화 저장 · lifespan 모델 로딩 |
+| 이수민 | 채팅 UI · 조건 입력 패널 · 출처 카드 · localStorage 프로필 유지 |
 
 **Phase 1 종료 조건**: 조건을 넣고 뺐을 때 답이 달라지는 것이 눈으로 확인된다.
 
@@ -366,8 +393,8 @@ class AskResponse(BaseModel):
 |---|---|
 | 김영민 | 다중 PDF 파싱 · 표 추출 · 세션 임시 컬렉션 |
 | 박준혁 | **하이브리드 검색**(BM25+Dense) · 프롬프트 개선 · 검색 성능 비교 실험 |
-| 최성호 | `/documents` · `/policies` · `/regions/summary` · SSE 스트리밍 |
-| 이수민 | `+` 첨부 UI · **카카오맵 인터랙션** · SSE 수신 · 검색모드 비교 UI |
+| 최성호 | `/api/documents` · `/api/policies` · `/api/regions/summary` · SSE 스트리밍 |
+| 이수민 | `+` 첨부 메뉴 · **카카오맵 컴포넌트** · SSE 수신 훅 · 검색모드 비교 UI |
 
 ### Phase 3 — 이미지 인식 (P3 · 조건부)
 
@@ -377,23 +404,62 @@ class AskResponse(BaseModel):
 |---|---|
 | 김영민 | OCR 파이프라인 · 이미지 전처리 |
 | 박준혁 | 추출 텍스트 → 정책 매칭 |
-| 최성호 | `POST /vision` |
+| 최성호 | `POST /api/vision` |
 | 이수민 | 이미지 업로드 · 인식 결과 UI |
 
 ### Phase 4 — 배포 (Module 14)
 
+이번 프로젝트는 **이미지를 두 가지로 만든다.** 이유는 아래 "단일 컨테이너 제약"을 참고한다.
+
 | 담당 | 작업 |
 |---|---|
-| 이수민 | `Dockerfile.ui` (Flask + gunicorn) · Docker Hub push |
-| 최성호 | `Dockerfile.api` (8000) · Docker Hub push · Git 히스토리 정리 |
+| 이수민 | `Dockerfile.web` (node build → nginx) · Docker Hub push |
+| 최성호 | `Dockerfile.api` · Docker Hub push · Git 히스토리 정리 |
 | 박준혁 | `docker-compose.yml` · 서비스 간 네트워크 · 통합 테스트 |
-| 김영민 | HF Spaces (`sdk: docker`, `app_port: 7860`) · CI/CD · 배포 문제 해결 기록 |
+| 김영민 | 통합 `Dockerfile` (multi-stage) · HF Spaces 배포 · CI/CD · 문제 해결 기록 |
 
-**포트 주의**: Hugging Face Docker Space는 기본 포트가 `7860`이다. Space `README.md`의 `app_port`, `Dockerfile`의 `EXPOSE`, gunicorn `--bind` 값을 모두 맞춰야 한다.
+#### 단일 컨테이너 제약
 
-**개발 서버 금지**: `flask run`의 내장 서버는 개발 전용이다. 컨테이너에서는 `gunicorn`으로 서빙한다. 이 역시 수업에서 다루지 않은 항목이다.
+Hugging Face Docker Space는 **컨테이너를 하나만** 실행하고 포트도 하나만 연다. 따라서 배포 형태가 두 갈래로 나뉜다.
 
-**Chroma DB 주의**: 벡터 DB를 이미지에 포함할지, Space 기동 시 생성할지 Phase 2 종료 전까지 결정한다. 포함하면 이미지가 커지고, 생성하면 콜드 스타트가 느려진다.
+| | 로컬 · Compose | HF Spaces |
+|---|---|---|
+| 구성 | `web`(nginx) + `api`(uvicorn) 2컨테이너 | 단일 컨테이너 |
+| 목적 | 서비스 분리 구조 시연 | 실제 배포 |
+| 파일 | `docker-compose.yml` | `Dockerfile` (multi-stage) |
+
+통합 `Dockerfile`은 node 스테이지에서 React를 빌드하고, python 스테이지로 `dist/`를 복사한 뒤 FastAPI가 서빙한다.
+
+```dockerfile
+FROM node:20-slim AS web
+WORKDIR /web
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+ARG VITE_KAKAO_MAP_KEY
+RUN npm run build
+
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY src/ ./src/
+COPY --from=web /web/dist ./dist
+EXPOSE 7860
+CMD ["uvicorn", "src.backend.api:app", "--host", "0.0.0.0", "--port", "7860"]
+```
+
+**이 두 갈래가 갈라진 이유와 해결 과정이 Module 14 발표의 핵심 소재다.** 평가 기준에 *"배포 과정에서 발생하는 문제점의 해결 과정을 상세하게 기술할 것"* 이 명시되어 있다.
+
+#### 그 밖의 배포 주의사항
+
+**포트**: HF Docker Space 기본 포트는 `7860`이다. Space `README.md`의 `app_port`와 `Dockerfile`의 `EXPOSE`, uvicorn `--port` 를 모두 맞춘다.
+
+**Vite 환경변수는 빌드 시점에 박힌다**: `VITE_*` 값은 런타임이 아니라 `npm run build` 시점에 번들에 포함된다. Docker에서는 `--build-arg` 로 넘겨야 하며, 배포 후 바꾸려면 다시 빌드해야 한다.
+
+**카카오맵 키 노출**: JavaScript 키는 번들에 포함되어 브라우저에 노출된다. 이는 정상이며, 카카오 개발자 콘솔의 **도메인 등록**으로 보호한다. 비밀 키가 아니므로 별도 은닉이 필요 없다.
+
+**Chroma DB**: 벡터 DB를 이미지에 포함할지, Space 기동 시 생성할지 Phase 2 종료 전까지 결정한다. 포함하면 이미지가 커지고, 생성하면 콜드 스타트가 느려진다.
 
 ---
 
@@ -440,7 +506,7 @@ scope는 `ui` · `api` · `rag` · `ingest` · `docker` 중 하나.
 ```
 feat(ui): 카카오맵 지역 클릭 시 확대 애니메이션 추가
 fix(rag): 프로필 미입력 시 메타 필터가 전체를 제외하던 문제 수정
-chore(docker): UI 컨테이너 포트를 7860으로 변경
+chore(docker): 통합 이미지 포트를 7860으로 변경
 ```
 
 ### 작업 흐름
@@ -460,6 +526,7 @@ chore(docker): UI 컨테이너 포트를 7860으로 변경
 
 - 남의 디렉터리를 직접 고치지 않는다. 필요하면 Issue를 열어 소유자에게 요청한다.
 - `schemas.py` 변경은 반드시 팀 채널에 공지 후 PR. 계약이 바뀌면 네 명 모두 영향받는다.
+- `package-lock.json` 은 커밋한다. 팀원 간 의존성 버전을 고정하기 위해서다.
 - 작업 시작 전 `git switch main && git pull` 을 습관화한다.
 - 하루가 끝나면 미완성이어도 push 한다. 로컬에만 쌓아두지 않는다.
 
@@ -473,42 +540,54 @@ chore(docker): UI 컨테이너 포트를 7860으로 변경
 git clone https://github.com/knukdt14/team-13-project.git
 cd team-13-project
 
+# 백엔드
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-cp .env.example .env             # KAKAO_MAP_KEY, HF_TOKEN 등 입력
+cp .env.example .env             # HF_TOKEN 등 입력
 
 python -m src.ingest.indexer     # 최초 1회, 벡터 DB 구축
+uvicorn src.backend.api:app --reload --port 8000     # 터미널 1
 
-uvicorn src.backend.api:app --reload --port 8000              # 터미널 1
-flask --app src/frontend/app.py run --debug --port 5000       # 터미널 2
+# 프론트엔드
+cd frontend
+npm install
+cp .env.example .env             # VITE_KAKAO_MAP_KEY 입력
+npm run dev                                          # 터미널 2
 ```
 
 | 주소 | 설명 |
 |---|---|
-| http://localhost:5000 | 서비스 화면 (Flask) |
+| http://localhost:5173 | 서비스 화면 (Vite 개발 서버) |
 | http://localhost:8000/docs | Swagger UI |
 | http://localhost:8000/redoc | ReDoc |
 
 ### Docker
 
 ```bash
-docker compose up --build
+docker compose up --build              # web + api 2컨테이너
+docker build -t youth-policy .         # HF Spaces용 통합 이미지
 ```
 
 ### 환경 변수
 
+**백엔드** — `.env`
+
 | 이름 | 설명 |
 |---|---|
-| `KAKAO_MAP_KEY` | 카카오맵 JavaScript 키. 사용 도메인 등록 필요 |
 | `HF_TOKEN` | Hugging Face 토큰 |
-| `API_URL` | 브라우저 JS가 호출할 백엔드 주소 (기본 `http://localhost:8000`) |
-| `USE_MOCK` | `true`면 프론트가 가짜 응답 사용 (백엔드 없이 UI 개발) |
-| `FLASK_SECRET_KEY` | Flask 세션 서명 키 |
 | `CHROMA_DIR` | 벡터 DB 경로 (기본 `./chroma_db`) |
+| `DB_PATH` | SQLite 경로 (기본 `./app.db`) |
 
-> **카카오맵 키 주의**: JavaScript 키는 카카오 개발자 콘솔에 **사용 도메인을 등록**해야 동작한다. 로컬(`http://localhost:5000`)과 배포 도메인(`https://<space>.hf.space`)을 모두 등록한다. Phase 2 시작 전에 미리 발급받아 둘 것.
+**프론트엔드** — `frontend/.env` (모두 `VITE_` 접두사 필수, 빌드 시점에 주입)
+
+| 이름 | 설명 |
+|---|---|
+| `VITE_KAKAO_MAP_KEY` | 카카오맵 JavaScript 키 |
+| `VITE_API_BASE` | API 기본 경로 (기본 `/api`) |
+| `VITE_USE_MOCK` | `true`면 백엔드 없이 가짜 응답으로 UI 개발 |
+
+> **카카오맵 키 주의**: JavaScript 키는 카카오 개발자 콘솔에 **사용 도메인을 등록**해야 동작한다. 로컬(`http://localhost:5173`)과 배포 도메인(`https://<space>.hf.space`)을 모두 등록한다. Phase 2 시작 전에 미리 발급받아 둘 것.
 
 ---
 
@@ -518,8 +597,8 @@ docker compose up --build
 
 | 항목 | 배점 | 대응 |
 |---|:---:|---|
-| Frontend | 20 | Blueprint 라우팅, 템플릿 상속(`base.html`), Jinja2 매크로, **카카오맵 인터랙션**, `+` 파일 첨부, SSE 스트리밍 수신 |
-| Backend / FastAPI | 20 | **Pydantic `response_model`**, `APIRouter`, `Depends`, `HTTPException`, `lifespan`, `CORSMiddleware`, SSE 스트리밍 |
+| Frontend | 20 | 컴포넌트 설계, 커스텀 훅, React Router, **카카오맵 인터랙션**, `+` 파일 첨부, **SSE 스트리밍 렌더** |
+| Backend / FastAPI | 20 | **Pydantic `response_model`**, `APIRouter`, `Depends`, `HTTPException`, `lifespan`, `StaticFiles` SPA 서빙, SSE |
 | LLM / RAG | 20 | **하이브리드 검색**(BM25+Dense), 프로필 기반 메타데이터 필터, 프롬프트 설계, 검색 모드별 성능 비교 |
 | 발표 및 시연 | 20 | 디렉터리 = 담당자 구조, Issue·PR 히스토리로 협업 과정 증빙 |
 | 프로젝트 완성도 | 20 | `frontend` / `backend` / `rag` / `ingest` 4계층 분리 |
@@ -529,9 +608,9 @@ docker compose up --build
 | 항목 | 배점 | 대응 |
 |---|:---:|---|
 | Git / GitHub | 20 | 보호된 `main`, `feature/*` 브랜치, Conventional Commits, PR 리뷰, Issue 연동 |
-| Docker / Docker Hub | 20 | UI·API 이미지 분리, 레이어 캐시를 고려한 Dockerfile, Docker Hub 태그 관리 |
-| Hugging Face Spaces | 20 | Docker SDK Space 배포, 포트 7860 전환, CI/CD |
-| 발표 및 시연 | 20 | 배포 중 발생한 문제와 해결 과정 기록 |
+| Docker / Docker Hub | 20 | web·api 이미지 분리, **multi-stage build**, 레이어 캐시 최적화, Docker Hub 태그 관리 |
+| Hugging Face Spaces | 20 | Docker SDK Space 배포, 단일 컨테이너 제약 대응, 포트 7860 전환, CI/CD |
+| 발표 및 시연 | 20 | Compose 구조와 Spaces 단일 컨테이너 사이의 간극을 어떻게 해결했는지 기록 |
 | 프로젝트 완성도 | 20 | Compose 기반 멀티 컨테이너 통합 동작 |
 
 ### "수업에서 다루지 않은 것" 대조표
@@ -540,12 +619,11 @@ docker compose up --build
 
 | 영역 | 수업 범위 (기본점) | 본 프로젝트 추가분 |
 |---|---|---|
-| Frontend | `@app.route` · URL 변수 · `request.args/form` · `render_template` · Jinja2 매크로 · `send_from_directory` · `session` | **Blueprint** · 템플릿 상속(`{% extends %}`) · `url_for` 정적파일 관리 · **fetch 비동기 통신** · **SSE 스트리밍 수신** · localStorage · CSS 트랜지션 · **카카오맵 SDK 연동** |
-| Backend | `Form(...)` · 생 `dict` 반환 · `UploadFile` · `StreamingResponse` | **Pydantic 모델 · `response_model`** · `APIRouter` · `Depends` · `lifespan` · CORS · SSE |
+| Frontend | Streamlit 위젯 · `session_state` · `file_uploader` · `expander` · Flask + Jinja2 템플릿 | **React 컴포넌트 설계** · 커스텀 훅 · 클라이언트 라우팅 · **SSE 스트리밍 렌더** · localStorage · CSS 트랜지션 · **카카오맵 SDK 연동** · Vite 빌드 |
+| Backend | `Form(...)` · 생 `dict` 반환 · `UploadFile` · `StreamingResponse` | **Pydantic 모델 · `response_model`** · `APIRouter` · `Depends` · `lifespan` · `StaticFiles` SPA 서빙 · SSE |
 | RAG | `PyPDFLoader` · `RecursiveCharacterTextSplitter` · `similarity_search(k=3)` | **하이브리드 검색** · 메타데이터 필터 · 표 파싱 · 다중 문서 · 검색 성능 비교 |
 | Data | 단일 PDF 로드 | **JSON 정책 데이터 정규화** · SQLite 이력 관리 · 세션별 컬렉션 분리 |
-
-> 수업의 Flask 예제는 form을 POST하고 페이지 전체를 다시 그리는 방식이다. 본 프로젝트는 **fetch 기반 비동기 통신**과 **SSE 토큰 스트리밍**으로 페이지 전환 없이 동작하며, 이것이 프론트엔드의 핵심 차별 요소다.
+| DevOps | 단일 스테이지 Dockerfile · 단일 서비스 | **multi-stage build** · Compose 멀티 컨테이너 · 단일 컨테이너 제약 대응 |
 
 ---
 
