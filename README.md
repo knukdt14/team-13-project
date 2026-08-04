@@ -27,6 +27,8 @@
 
 이 한 문장에 답하려면 나이·지역·취업상태·소득구간을 알아야 한다. 조건을 입력하면 그 사용자 전용 챗봇으로 동작하고, 입력하지 않으면 전체 기준으로 답한다. 이 조건 매칭이 본 프로젝트 RAG 설계의 중심축이다.
 
+수집한 정책 데이터가 나이·지역·소득·취업상태·학력을 코드 필드로 갖고 있어, 이 방식이 실제로 가능하다. 자세한 내용은 §5를 참고한다.
+
 ---
 
 ## 2. 기능
@@ -45,7 +47,7 @@
 - 사용자 조건 입력(나이 / 지역 / 취업상태 / 소득구간 / 학력)
 - 조건에 맞는 정책만 필터링하여 검색 → 신청 가능 여부와 근거를 함께 안내
 - 조건 미입력 시 전체 기준으로 응답
-- 답변에 **출처 표시** (정책명 · 소관기관 · 원문 링크 · 페이지)
+- 답변에 **출처 표시** (정책명 · 소관기관 · 신청 링크)
 - 토큰 스트리밍 응답
 
 ### F2. 다중 PDF 공고문 분석 — **P1**
@@ -162,11 +164,11 @@ app.mount("/", StaticFiles(directory="dist", html=True), name="spa")
 
 마운트 순서가 중요하다. `StaticFiles` 마운트는 **모든 API 라우터 등록 이후**에 와야 한다.
 
-### 데이터 파이프라인 두 갈래
+### 데이터 흐름 두 갈래
 
 | | 기본 지식베이스 | 세션 업로드 |
 |---|---|---|
-| 입력 | 정책 JSON 데이터 | 사용자가 올린 PDF / 이미지 |
+| 입력 | `data/policies_rag_docs.json` (2,693건) | 사용자가 올린 PDF / 이미지 |
 | 시점 | 사전 구축 (배포 전) | 런타임 |
 | 저장 | Chroma `policies` 컬렉션 (영속) | Chroma 임시 컬렉션 (세션 종료 시 정리) |
 | 담당 | 김영민 | 김영민 (파싱) + 박준혁 (검색 병합) |
@@ -175,7 +177,65 @@ app.mount("/", StaticFiles(directory="dist", html=True), name="spa")
 
 ---
 
-## 5. 프로젝트 구조
+## 5. 데이터
+
+### 출처
+
+온통청년(청년정책 통합정보) 개방 API에서 수집한 **청년정책 2,693건**.
+
+### 파일
+
+| 파일 | 내용 |
+|---|---|
+| `data/youth_policies_raw.json` | API 원본 응답 (2,693건) |
+| `data/policies_structured.json` | 정규화 결과. 코드 필드에 사람이 읽는 이름(`*CdNm`)과 리스트(`*CdList`)를 덧붙임 |
+| `data/policies_rag_docs.json` | 임베딩용 문서. `{plcyNo, text}` 형태로 정책 하나가 문서 하나 |
+| `data/code_definitions.json` | 코드 → 한글명 매핑표 (`jobCd`, `schoolCd`, `earnCndSeCd` 등) |
+| `data/policies_*.pdf` | 사람이 확인하기 위한 출력본 |
+
+### 조건 매칭에 쓰는 필드
+
+`UserProfile`은 사람이 읽는 값으로 받고, 검색 계층에서 코드로 변환해 필터링한다.
+
+| UserProfile | 정책 필드 | 코드표 |
+|---|---|---|
+| `age` | `sprtTrgtMinAge` ~ `sprtTrgtMaxAge` | — (정수 범위) |
+| `region` | `zipCdList` | 지역 코드 ↔ 행정구역 매핑 필요 |
+| `employment` | `jobCdList` | `jobCd` — 재직자 / 미취업자 / 프리랜서 / (예비)창업자 … |
+| `education` | `schoolCdList` | `schoolCd` — 고교 재학 / 대학 재학 / 대졸 예정 / 석·박사 … |
+| `income_bracket` | `earnCndSeCd`, `earnMinAmt`, `earnMaxAmt` | `earnCndSeCd` — 무관 / 연소득 / 기타 |
+| (확장) 혼인 | `mrgSttsCd` | `mrgSttsCd` |
+| (확장) 전공 | `plcyMajorCdList` | `plcyMajorCd` |
+
+정책 하나의 실제 모습:
+
+```
+plcyNm          [8월 접수] 2026년 구직청년 자격증 취득지원 사업
+lclsfNm         교육･직업훈련        mclsfNm  교육비지원
+sprtTrgtMinAge  19                  sprtTrgtMaxAge  39
+jobCdNmList     ["제한없음"]         schoolCdNmList  ["제한없음"]
+earnCndSeCdNm   무관
+zipCdList       ["12210", "12240", "12270", "12300", "12330"]
+aplyStartYmd    2026-08-03          aplyEndYmd  2026-08-31
+operInstCdNm    전남광주통합특별시
+aplyUrlAddr     https://youth.gwangju.go.kr/...
+```
+
+### 구현 시 주의
+
+**"제한없음"을 반드시 통과시킬 것.** `jobCd`·`schoolCd`·`sbizCd`·`plcyMajorCd`에는 `제한없음` 코드(`0013010`, `0049010` 등)가 있고, 실제로 상당수 정책이 이 값을 쓴다. 필터 조건을 `사용자 값 == 정책 값` 으로만 짜면 이런 정책이 전부 탈락한다. **`사용자 값과 일치` OR `제한없음`** 으로 판정해야 한다.
+
+**나이 제한 없는 정책**은 `sprtTrgtAgeLmtYn = 'N'` 으로 표시된다. 이 경우 나이 범위 비교를 건너뛴다.
+
+**마감된 정책 처리** — `aplyPrdSeCd`가 `0057003`(마감)이거나 `aplyEndYmd`가 지난 정책은 기본적으로 제외하되, 사용자가 명시적으로 요청하면 보여준다. `0057002`는 상시 모집이라 기간 비교 대상이 아니다.
+
+**지도 연동** — `zipCdList`의 지역 코드를 카카오맵 폴리곤(행정구역 GeoJSON)과 이어 붙일 매핑 테이블이 필요하다. 정책 하나가 여러 지역에 걸치므로 지역별 집계 시 중복 계산에 주의한다. `GET /api/regions/summary`가 이 집계를 담당한다.
+
+**전국 단위 정책**은 `pvsnInstGroupCd`가 중앙부처인 경우가 많다. 지역 필터를 걸 때 "내 지역 + 전국"을 함께 잡아야 한다.
+
+---
+
+## 6. 프로젝트 구조
 
 디렉터리 하나가 담당자 한 명에 대응한다. 소유자가 아닌 사람은 해당 디렉터리를 직접 수정하지 않고 Issue 또는 PR 리뷰로 요청한다.
 
@@ -229,15 +289,13 @@ team-13-project/
 │   │   └── prompts.py               # 프롬프트 템플릿
 │   │
 │   └── ingest/                      ← 김영민
-│       ├── collect.py               # 정책 JSON 수집
-│       ├── normalize.py             # 스키마 정규화 + 메타데이터 추출
+│       ├── collect.py               # 온통청년 API 수집
+│       ├── normalize.py             # 스키마 정규화 + 코드 해석
 │       ├── indexer.py               # 청킹 → 임베딩 → Chroma 적재
 │       ├── pdf.py                   # PDF 파싱 (표 포함)
 │       └── vision.py                # 이미지 OCR (P3)
 │
-├── data/
-│   ├── policies.json                # 원본 정책 데이터
-│   └── regions.geojson              # 행정구역 폴리곤
+├── data/                            # §5 참고
 ├── chroma_db/                       # 벡터 DB (gitignore)
 ├── app.db                           # SQLite (gitignore)
 ├── tests/
@@ -256,7 +314,7 @@ team-13-project/
 
 ---
 
-## 6. 역할 분담
+## 7. 역할 분담
 
 **팀 구성: 4인 1팀**
 
@@ -264,7 +322,7 @@ team-13-project/
 |---|---|---|---|---|
 | **최성호** | 팀장 · Backend Engineer | 총괄·일정 관리 / FastAPI 서비스 · API 계약 설계 | Git 브랜치 전략 · PR 리뷰 운영 / `Dockerfile.api` | `src/backend/` |
 | **박준혁** | AI Engineer (LLM · RAG) | 하이브리드 검색 / 프롬프트 설계 / 자격 진단 / 생성·스트리밍 | `docker-compose.yml` · 멀티 컨테이너 통합 | `src/rag/` |
-| **김영민** | AI Engineer (Data · Ingest) | 정책 데이터 수집·정규화 / PDF 파싱 / 인덱싱 파이프라인 | HF Spaces 배포 · 통합 `Dockerfile` · CI/CD | `src/ingest/` |
+| **김영민** | AI Engineer (Data · Ingest) | 정책 데이터 수집·정규화 / PDF 파싱 / 인덱싱 파이프라인 | HF Spaces 배포 · 통합 `Dockerfile` · CI/CD | `src/ingest/`, `data/` |
 | **이수민** | Frontend Engineer | React SPA 전반 / 카카오맵 / 채팅 스트리밍 UI / 조건 입력 UX | `Dockerfile.web` · Docker Hub push | `frontend/` |
 
 ### 공동 책임
@@ -285,7 +343,7 @@ team-13-project/
 
 ---
 
-## 7. API 명세
+## 8. API 명세
 
 모든 엔드포인트는 **`/api` 접두사**를 갖는다. 전체 명세는 서버 기동 후 `http://localhost:8000/docs` 에서 확인한다.
 
@@ -310,8 +368,9 @@ team-13-project/
 | Method | Path | Request | Response |
 |---|---|---|---|
 | `GET` | `/api/policies` | `region`, `category`, `page`, `size` | `PolicyListResponse` |
-| `GET` | `/api/policies/{policy_id}` | – | `PolicyDetail` |
+| `GET` | `/api/policies/{plcy_no}` | – | `PolicyDetail` |
 | `GET` | `/api/regions/summary` | – | `list[RegionSummary]` (지역별 정책 수) |
+| `GET` | `/api/codes` | – | `code_definitions.json` (프론트 셀렉트 박스용) |
 
 ### 세션 · 피드백
 
@@ -322,13 +381,15 @@ team-13-project/
 
 ### 주요 스키마
 
+`UserProfile`은 사람이 읽는 값으로 받는다. 코드 변환은 `src/rag/retriever.py`에서 처리한다.
+
 ```python
 class UserProfile(BaseModel):
     age: int | None = None
     region: str | None = None          # 시도 · 시군구
-    employment: EmploymentStatus | None = None
+    employment: str | None = None      # jobCd 한글명 (예: "미취업자")
+    education: str | None = None       # schoolCd 한글명 (예: "대학 재학")
     income_bracket: int | None = None  # 중위소득 %
-    education: str | None = None
 
 class AskRequest(BaseModel):
     question: str
@@ -337,20 +398,22 @@ class AskRequest(BaseModel):
     top_k: int = 5
     mode: SearchMode = SearchMode.HYBRID   # vector | bm25 | hybrid
     doc_ids: list[str] = []                # 세션 업로드 문서 한정 검색
+    include_closed: bool = False           # 마감 정책 포함 여부
 
 class Source(BaseModel):
-    doc_id: str
-    title: str          # 정책명
-    organization: str   # 소관기관
-    page: int | None
+    plcy_no: str        # 정책 고유번호
+    title: str          # plcyNm
+    organization: str   # operInstCdNm
+    category: str       # lclsfNm · mclsfNm
+    apply_url: str | None
+    apply_period: str | None
     snippet: str
     score: float
-    url: str | None
 
 class AskResponse(BaseModel):
     answer: str
     sources: list[Source]
-    matched_policies: list[str]
+    matched_policies: list[str]   # plcyNo 목록
     session_id: str
     elapsed_ms: int
 ```
@@ -359,7 +422,7 @@ class AskResponse(BaseModel):
 
 ---
 
-## 8. 개발 순서
+## 9. 개발 순서
 
 ### Phase 0 — 합의와 골격 (전원 · 동시)
 
@@ -370,7 +433,7 @@ class AskResponse(BaseModel):
 | 0-1 | 기능 우선순위 · 일정 확정, GitHub Issue 등록 | 최성호 |
 | 0-2 | **`schemas.py` 확정 후 `main`에 선(先)머지** | 최성호 (전원 리뷰) |
 | 0-3 | 디렉터리 골격 · `requirements.txt` · `.env.example` | 최성호 |
-| 0-4 | 정책 데이터 출처 확정, 샘플 30건 확보 | 김영민 |
+| 0-4 | ~~정책 데이터 수집~~ **완료** / 지역코드 ↔ 행정구역 매핑 확보 | 김영민 |
 | 0-5 | 브랜치 보호 규칙 · PR 템플릿 · Issue 템플릿 | 최성호 |
 | 0-6 | Vite 프로젝트 초기화 · 라우팅 · `api/mock.js` | 이수민 |
 
@@ -380,8 +443,8 @@ class AskResponse(BaseModel):
 
 | 담당 | 작업 |
 |---|---|
-| 김영민 | 정책 JSON 정규화 → 메타데이터(나이·지역·소득·기간) 추출 → 청킹 → Chroma 적재 |
-| 박준혁 | 벡터 검색 + 프로필 메타 필터 → 프롬프트 → 생성 |
+| 김영민 | `policies_rag_docs.json` → 청킹 → 임베딩 → Chroma 적재. 메타데이터로 나이·지역·직업·학력 코드 저장 |
+| 박준혁 | 벡터 검색 + 프로필 메타 필터(§5 "제한없음" 규칙 포함) → 프롬프트 → 생성 |
 | 최성호 | `POST /api/ask` · SQLite 대화 저장 · lifespan 모델 로딩 |
 | 이수민 | 채팅 UI · 조건 입력 패널 · 출처 카드 · localStorage 프로필 유지 |
 
@@ -393,7 +456,7 @@ class AskResponse(BaseModel):
 |---|---|
 | 김영민 | 다중 PDF 파싱 · 표 추출 · 세션 임시 컬렉션 |
 | 박준혁 | **하이브리드 검색**(BM25+Dense) · 프롬프트 개선 · 검색 성능 비교 실험 |
-| 최성호 | `/api/documents` · `/api/policies` · `/api/regions/summary` · SSE 스트리밍 |
+| 최성호 | `/api/documents` · `/api/policies` · `/api/regions/summary` · `/api/codes` · SSE |
 | 이수민 | `+` 첨부 메뉴 · **카카오맵 컴포넌트** · SSE 수신 훅 · 검색모드 비교 UI |
 
 ### Phase 3 — 이미지 인식 (P3 · 조건부)
@@ -459,11 +522,11 @@ CMD ["uvicorn", "src.backend.api:app", "--host", "0.0.0.0", "--port", "7860"]
 
 **카카오맵 키 노출**: JavaScript 키는 번들에 포함되어 브라우저에 노출된다. 이는 정상이며, 카카오 개발자 콘솔의 **도메인 등록**으로 보호한다. 비밀 키가 아니므로 별도 은닉이 필요 없다.
 
-**Chroma DB**: 벡터 DB를 이미지에 포함할지, Space 기동 시 생성할지 Phase 2 종료 전까지 결정한다. 포함하면 이미지가 커지고, 생성하면 콜드 스타트가 느려진다.
+**저장소 용량**: `data/` 의 JSON·PDF가 이미 수십 MB다. Docker 이미지에 통째로 넣으면 빌드가 느려지므로, 인덱싱에 필요한 `policies_rag_docs.json`·`code_definitions.json` 만 복사하거나 미리 만든 `chroma_db/` 를 넣는 방안을 Phase 2 종료 전까지 결정한다.
 
 ---
 
-## 9. Git 협업 규칙
+## 10. Git 협업 규칙
 
 Module 14 평가에 *"브랜치, 커밋, PR, Issue 등을 적절히 활용했는가"* 가 명시되어 있다. **`main`에 직접 push 하지 않는다.**
 
@@ -475,7 +538,7 @@ main                    보호 브랜치. PR 병합으로만 갱신
  ├── feature/ui-map
  ├── feature/api-ask
  ├── feature/rag-hybrid
- ├── feature/ingest-policies
+ ├── feature/ingest-index
  ├── fix/map-popup-zindex
  └── docs/readme
 ```
@@ -505,7 +568,7 @@ scope는 `ui` · `api` · `rag` · `ingest` · `docker` 중 하나.
 
 ```
 feat(ui): 카카오맵 지역 클릭 시 확대 애니메이션 추가
-fix(rag): 프로필 미입력 시 메타 필터가 전체를 제외하던 문제 수정
+fix(rag): 제한없음 코드가 필터에서 탈락하던 문제 수정
 chore(docker): 통합 이미지 포트를 7860으로 변경
 ```
 
@@ -525,6 +588,7 @@ chore(docker): 통합 이미지 포트를 7860으로 변경
 ### 충돌 예방
 
 - 남의 디렉터리를 직접 고치지 않는다. 필요하면 Issue를 열어 소유자에게 요청한다.
+- **`README.md` 는 여러 명이 동시에 고치기 쉬운 파일이다.** 수정 전 팀 채널에 알리고, 작업 중에는 `git pull` 을 자주 한다.
 - `schemas.py` 변경은 반드시 팀 채널에 공지 후 PR. 계약이 바뀌면 네 명 모두 영향받는다.
 - `package-lock.json` 은 커밋한다. 팀원 간 의존성 버전을 고정하기 위해서다.
 - 작업 시작 전 `git switch main && git pull` 을 습관화한다.
@@ -532,7 +596,7 @@ chore(docker): 통합 이미지 포트를 7860으로 변경
 
 ---
 
-## 10. 실행 방법
+## 11. 실행 방법
 
 ### 로컬
 
@@ -591,7 +655,7 @@ docker build -t youth-policy .         # HF Spaces용 통합 이미지
 
 ---
 
-## 11. 평가 기준 대응
+## 12. 평가 기준 대응
 
 ### Module 13 (100점)
 
@@ -599,7 +663,7 @@ docker build -t youth-policy .         # HF Spaces용 통합 이미지
 |---|:---:|---|
 | Frontend | 20 | 컴포넌트 설계, 커스텀 훅, React Router, **카카오맵 인터랙션**, `+` 파일 첨부, **SSE 스트리밍 렌더** |
 | Backend / FastAPI | 20 | **Pydantic `response_model`**, `APIRouter`, `Depends`, `HTTPException`, `lifespan`, `StaticFiles` SPA 서빙, SSE |
-| LLM / RAG | 20 | **하이브리드 검색**(BM25+Dense), 프로필 기반 메타데이터 필터, 프롬프트 설계, 검색 모드별 성능 비교 |
+| LLM / RAG | 20 | **하이브리드 검색**(BM25+Dense), **프로필 기반 코드 메타 필터**, 프롬프트 설계, 검색 모드별 성능 비교 |
 | 발표 및 시연 | 20 | 디렉터리 = 담당자 구조, Issue·PR 히스토리로 협업 과정 증빙 |
 | 프로젝트 완성도 | 20 | `frontend` / `backend` / `rag` / `ingest` 4계층 분리 |
 
@@ -619,15 +683,15 @@ docker build -t youth-policy .         # HF Spaces용 통합 이미지
 
 | 영역 | 수업 범위 (기본점) | 본 프로젝트 추가분 |
 |---|---|---|
-| Frontend | Streamlit 위젯 · `session_state` · `file_uploader` · `expander` · Flask + Jinja2 템플릿 | **React 컴포넌트 설계** · 커스텀 훅 · 클라이언트 라우팅 · **SSE 스트리밍 렌더** · localStorage · CSS 트랜지션 · **카카오맵 SDK 연동** · Vite 빌드 |
+| Frontend | Streamlit 위젯 · `session_state` · `file_uploader` · Flask + Jinja2 템플릿 | **React 컴포넌트 설계** · 커스텀 훅 · 클라이언트 라우팅 · **SSE 스트리밍 렌더** · localStorage · CSS 트랜지션 · **카카오맵 SDK 연동** · Vite 빌드 |
 | Backend | `Form(...)` · 생 `dict` 반환 · `UploadFile` · `StreamingResponse` | **Pydantic 모델 · `response_model`** · `APIRouter` · `Depends` · `lifespan` · `StaticFiles` SPA 서빙 · SSE |
-| RAG | `PyPDFLoader` · `RecursiveCharacterTextSplitter` · `similarity_search(k=3)` | **하이브리드 검색** · 메타데이터 필터 · 표 파싱 · 다중 문서 · 검색 성능 비교 |
-| Data | 단일 PDF 로드 | **JSON 정책 데이터 정규화** · SQLite 이력 관리 · 세션별 컬렉션 분리 |
+| RAG | `PyPDFLoader` · `RecursiveCharacterTextSplitter` · `similarity_search(k=3)` | **하이브리드 검색** · **코드 기반 메타데이터 필터** · 표 파싱 · 다중 문서 · 검색 성능 비교 |
+| Data | 단일 PDF 로드 | **개방 API 수집 2,693건** · 코드 정규화 · SQLite 이력 관리 · 세션별 컬렉션 분리 |
 | DevOps | 단일 스테이지 Dockerfile · 단일 서비스 | **multi-stage build** · Compose 멀티 컨테이너 · 단일 컨테이너 제약 대응 |
 
 ---
 
-## 12. 팀
+## 13. 팀
 
 | 이름 | 역할 | GitHub |
 |---|---|---|
