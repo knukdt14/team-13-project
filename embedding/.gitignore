@@ -1,0 +1,9 @@
+storage/index.faiss
+storage/chunk_metadata.json
+storage/manifest.json
+storage/chroma/
+__pycache__/
+tests/__pycache__/
+*.pyc
+.env
+.venv-gpu/
