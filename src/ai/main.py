@@ -8,6 +8,11 @@
     GET  /health    준비 상태 (백엔드 기동 순서 판정에 사용)
     POST /search    PolicyRetriever.search
     POST /generate  SolarGenerator.stream_answer (NDJSON 스트리밍)
+    POST /ocr       이미지에서 텍스트 추출 (F4·P3)
+
+OCR도 여기 있는 이유는 torch 때문이다. easyocr 은 torch 를 끌고 오는데,
+이 컨테이너에는 임베딩 모델용 torch 가 이미 있다. 백엔드에 넣으면 같은 2GB
+라이브러리가 두 컨테이너에 중복으로 설치된다.
 
 모델 적재는 수 분이 걸릴 수 있으므로 ``/health`` 는 모델이 없어도 즉시
 응답해야 한다. 그래야 compose 의 healthcheck 가 "아직 준비 안 됨"을 구분한다.
@@ -20,17 +25,21 @@ import logging
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.ai.schemas import (
     AIHealthResponse,
     ERROR_KEY,
     GenerateRequest,
+    OcrResponse,
     SearchRequest,
     SearchResponse,
     TOKEN_KEY,
 )
+
+# 이미지 한 장 상한. 이보다 큰 사진은 OCR 정확도보다 메모리가 먼저 문제가 된다.
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s [ai] %(message)s"
@@ -153,3 +162,41 @@ def generate(body: GenerateRequest, request: Request):
             yield json.dumps({ERROR_KEY: str(error)}, ensure_ascii=False) + "\n"
 
     return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+
+@app.post("/ocr", response_model=OcrResponse, summary="이미지에서 텍스트 추출")
+async def ocr(request: Request, filename: str = Query(default="image")):
+    """원본 이미지 바이트를 그대로 본문에 담아 받는다.
+
+    multipart 로 받으면 python-multipart 의존성이 하나 더 붙는데, 백엔드가
+    이미 확장자를 검사한 뒤 넘기므로 파일 이름은 로그용으로만 쓴다.
+
+    OCR 파이프라인은 팀 ingest 담당(김영민)이 만든
+    ``src/ingest/documents/vision.py`` 를 그대로 쓴다. 같은 로직을 여기서
+    다시 구현하지 않는다.
+    """
+    data = await request.body()
+    if not data:
+        return JSONResponse(
+            status_code=400, content={"detail": "빈 이미지예요.", "code": "invalid_file"}
+        )
+    if len(data) > MAX_IMAGE_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content={
+                "detail": f"이미지가 너무 커요({len(data) // (1024 * 1024)}MB). "
+                          f"{MAX_IMAGE_BYTES // (1024 * 1024)}MB 이하로 올려주세요.",
+                "code": "invalid_file",
+            },
+        )
+    try:
+        # easyocr 모델(약 100MB)은 첫 호출에서 내려받아 캐시된다. 그래서
+        # import 도 함수 안에서 한다. 서비스 기동을 느리게 하지 않기 위해서다.
+        from src.ingest.documents.vision import read_image
+
+        text, note = read_image(data)
+    except Exception as error:  # noqa: BLE001
+        logger.exception("OCR 실패(%s): %s", filename, error)
+        return _unavailable(f"이미지에서 글자를 읽지 못했어요: {error}", "ocr_failed")
+    logger.info("OCR 완료(%s) · %d자", filename, len(text))
+    return OcrResponse(text=text, note=note, chars=len(text))

@@ -1,20 +1,26 @@
-"""첨부 파일 파싱과 SQLite 영속화."""
+"""첨부 파일 파싱과 SQLite 영속화.
+
+PDF 는 가벼워서 여기서 직접 읽는다. 이미지 OCR 은 easyocr → torch 를 끌고
+오므로 이 컨테이너에 두지 않고, torch 가 이미 있는 AI 서비스에 맡긴다.
+"""
 
 from __future__ import annotations
 
 import io
 import re
-import sys
 import uuid
+from typing import TYPE_CHECKING
 
 from src.backend.db.repository import Repository
 from src.backend.errors import InvalidFileError, NotFoundError
 from src.backend.schemas import AttachmentInfo, DeleteResponse
 from src.shared.constants import SUPPORTED_IMAGE_SUFFIXES
 
+if TYPE_CHECKING:
+    from src.backend.services.ai_client import AIClient
+
 PREVIEW_LIMIT = 400
 EXCERPT_LIMIT = 1800
-_ocr_reader = None
 
 
 def read_pdf(data: bytes) -> tuple[str, int, str]:
@@ -28,43 +34,19 @@ def read_pdf(data: bytes) -> tuple[str, int, str]:
     return text, len(reader.pages), note
 
 
-def read_image(data: bytes) -> tuple[str, str]:
-    """EasyOCR 모델을 최초 이미지 요청에서 한 번만 준비한다."""
-    global _ocr_reader
-    try:
-        import easyocr
-        import numpy as np
-        from PIL import Image
-    except ImportError as error:
-        # 백엔드 이미지를 가볍게 유지하려고 OCR 의존성(torch 계열)은 넣지 않는다.
-        # 이미지 인식(F4·P3)을 켜려면 requirements.api.txt 에 easyocr 를 추가한다.
-        raise InvalidFileError(
-            "이미지 인식(OCR) 기능이 이 서버에 설치되어 있지 않아요. PDF로 올려주세요."
-        ) from error
-
-    if _ocr_reader is None:
-        for stream in (sys.stdout, sys.stderr):
-            reconfigure = getattr(stream, "reconfigure", None)
-            if callable(reconfigure):
-                try:
-                    reconfigure(encoding="utf-8", errors="replace")
-                except Exception:
-                    pass
-        # Windows 콘솔에서 진행률 문자 인코딩으로 죽지 않도록 반드시 끈다.
-        _ocr_reader = easyocr.Reader(["ko", "en"], gpu=False, verbose=False)
-    lines = _ocr_reader.readtext(
-        np.array(Image.open(io.BytesIO(data)).convert("RGB")),
-        detail=0,
-        paragraph=True,
-    )
-    text = re.sub(r"[ \t]+", " ", "\n".join(str(line) for line in lines)).strip()
-    note = "" if text else "글자를 찾지 못했어요. 더 선명한 사진으로 다시 올려보세요."
-    return text, note
-
-
 class DocumentService:
-    def __init__(self, repository: Repository):
+    def __init__(self, repository: Repository, ai: "AIClient | None" = None):
         self.repository = repository
+        # 이미지 첨부일 때만 필요하다. PDF·목록·삭제는 AI 없이 동작한다.
+        self.ai = ai
+
+    def read_image(self, data: bytes, filename: str) -> tuple[str, str]:
+        """OCR 은 AI 서비스에 위임한다."""
+        if self.ai is None:
+            raise InvalidFileError(
+                "이미지 인식을 맡은 AI 서비스에 연결되지 않았어요. PDF로 올려주세요."
+            )
+        return self.ai.ocr(data, filename)
 
     def add(self, session_id: str, filename: str, data: bytes) -> AttachmentInfo:
         if not data:
@@ -74,7 +56,7 @@ class DocumentService:
             text, pages, note = read_pdf(data)
             kind = "pdf"
         elif lower.endswith(SUPPORTED_IMAGE_SUFFIXES):
-            text, note = read_image(data)
+            text, note = self.read_image(data, filename)
             pages, kind = 0, "image"
         else:
             raise InvalidFileError(f"PDF 또는 이미지 파일만 올릴 수 있어요: {filename}")
