@@ -1,7 +1,8 @@
 # AI 서비스 컨테이너 전용 의존성.
 #
-# torch 는 Dockerfile.ai 에서 CPU 전용 휠로 따로 설치한다. 기본 인덱스로
-# 설치하면 CUDA 런타임까지 딸려와 이미지가 2GB 이상 커진다.
+# torch·torchvision 은 Dockerfile.ai 에서 CPU 전용 휠로 따로 설치한다. 기본
+# 인덱스로 설치하면 CUDA 런타임까지 딸려와 이미지가 2GB 이상 커진다.
+# (torchvision 은 easyocr 이 요구한다.)
 
 faiss-cpu>=1.8.0
 numpy>=1.26.0
@@ -10,6 +11,11 @@ transformers>=5.0,<6.0
 openai>=1.52.2
 python-dotenv>=1.0.1
 rank-bm25>=0.2.2
+
+# 이미지 OCR(F4·P3). torch 가 이 컨테이너에 이미 있으므로 여기서 처리한다.
+# 백엔드에 두면 같은 torch 가 두 이미지에 중복 설치된다.
+easyocr
+pillow
 
 # HTTP 창구
 fastapi

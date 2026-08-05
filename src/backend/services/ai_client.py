@@ -142,6 +142,36 @@ class AIClient:
                 f"AI 서비스와의 연결이 끊겼어요({self.base_url}): {error}"
             ) from error
 
+    # ------------------------------------------------------------------ OCR
+
+    def ocr(self, data: bytes, filename: str = "image") -> tuple[str, str]:
+        """이미지 바이트를 AI 서비스로 보내 텍스트를 받는다.
+
+        easyocr 은 torch 를 끌고 오므로 백엔드에 두지 않는다. torch 가 이미
+        있는 AI 컨테이너에서 처리하고 결과 문자열만 받아 온다.
+
+        첫 호출은 easyocr 모델(약 100MB) 다운로드 때문에 느릴 수 있어
+        읽기 제한 시간을 따로 넉넉히 준다.
+        """
+        try:
+            response = self._client.post(
+                "/ocr",
+                params={"filename": filename},
+                content=data,
+                headers={"Content-Type": "application/octet-stream"},
+                timeout=httpx.Timeout(connect=5.0, read=300.0, write=60.0, pool=5.0),
+            )
+        except httpx.HTTPError as error:
+            raise RAGUnavailableError(
+                f"이미지 인식을 맡은 AI 서비스에 연결하지 못했어요({self.base_url}): {error}"
+            ) from error
+        if response.status_code >= 400:
+            raise RAGUnavailableError(
+                self._detail(response, "이미지에서 글자를 읽지 못했어요.")
+            )
+        body = response.json()
+        return str(body.get("text") or ""), str(body.get("note") or "")
+
     # ------------------------------------------------------------------ 내부
 
     @staticmethod

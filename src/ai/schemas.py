@@ -46,6 +46,14 @@ class GenerateRequest(BaseModel):
     history: list[dict[str, str]] = Field(default_factory=list)
 
 
+class OcrResponse(BaseModel):
+    """포스터·현수막 사진에서 뽑아낸 텍스트."""
+
+    text: str = ""
+    note: str = ""
+    chars: int = 0
+
+
 class AIHealthResponse(BaseModel):
     """백엔드가 기동 순서와 503 판정에 쓰는 준비 상태."""
 
@@ -67,6 +75,7 @@ __all__ = [
     "AIHealthResponse",
     "ERROR_KEY",
     "GenerateRequest",
+    "OcrResponse",
     "SearchRequest",
     "SearchResponse",
     "TOKEN_KEY",

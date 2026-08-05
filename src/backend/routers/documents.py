@@ -3,8 +3,9 @@
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
 from src.backend.db.repository import Repository
-from src.backend.deps import get_repository
+from src.backend.deps import get_ai_client, get_repository
 from src.backend.schemas import AttachmentInfo, DeleteResponse, UploadResponse
+from src.backend.services.ai_client import AIClient
 from src.backend.services.document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -15,8 +16,10 @@ async def upload_documents(
     session_id: str = Form(...),
     files: list[UploadFile] = File(...),
     repository: Repository = Depends(get_repository),
+    ai: AIClient = Depends(get_ai_client),
 ) -> UploadResponse:
-    service = DocumentService(repository)
+    # 이미지 OCR 만 AI 서비스로 넘긴다. PDF 는 AI 가 꺼져 있어도 처리된다.
+    service = DocumentService(repository, ai)
     items = [service.add(session_id, file.filename or "upload", await file.read()) for file in files]
     return UploadResponse(items=items)
 
