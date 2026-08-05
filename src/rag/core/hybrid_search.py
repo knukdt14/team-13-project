@@ -1,4 +1,4 @@
-"""정책 문서의 BM25 검색과 Dense+BM25 순위 결합."""
+"""정책 문서의 BM25 검색과 Dense·BM25 순위를 결합한다."""
 
 from __future__ import annotations
 

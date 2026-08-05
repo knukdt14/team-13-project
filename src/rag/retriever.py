@@ -9,12 +9,11 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from .condition_extractor import ConditionExtractor
-from .config import DEFAULT_SETTINGS, Settings
-from .data_loader import load_policies
-from .device import resolve_device
-from .hybrid_search import BM25Search, reciprocal_rank_fusion
-from .policy_filter import PolicyFilter
+from .core.config import DEFAULT_SETTINGS, Settings
+from .core.data_loader import load_policies
+from .core.device import resolve_device
+from .core.hybrid_search import BM25Search, reciprocal_rank_fusion
+from .eligibility import ConditionExtractor, PolicyFilter
 
 
 class PolicyRetriever:
@@ -29,7 +28,7 @@ class PolicyRetriever:
         if indexed_model != settings.model_name:
             raise RuntimeError(
                 f"현재 인덱스 모델({indexed_model})과 설정 모델({settings.model_name})이 "
-                "다릅니다. python -m embedding.build_index 를 다시 실행하세요."
+                "다릅니다. python -m src.rag.cli.build_index 를 다시 실행하세요."
             )
         with settings.metadata_path.open("r", encoding="utf-8") as file:
             self.documents: list[dict[str, Any]] = json.load(file)
@@ -261,6 +260,6 @@ class PolicyRetriever:
         ]
         if missing:
             raise FileNotFoundError(
-                "임베딩 인덱스가 없습니다. 먼저 python -m embedding.build_index 를 "
+                "임베딩 인덱스가 없습니다. 먼저 python -m src.rag.cli.build_index 를 "
                 "실행하세요. 누락 파일: " + ", ".join(str(path) for path in missing)
             )

@@ -1,7 +1,7 @@
 import unittest
 from datetime import date
 
-from embedding.policy_filter import PolicyFilter
+from src.rag.eligibility import PolicyFilter
 
 
 class PolicyFilterTest(unittest.TestCase):

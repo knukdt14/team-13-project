@@ -1,4 +1,4 @@
-"""정책 검색 문서와 구조화 정책 JSON 로더."""
+"""정책 검색 문서와 구조화 정책 JSON을 불러오는 로더."""
 
 from __future__ import annotations
 

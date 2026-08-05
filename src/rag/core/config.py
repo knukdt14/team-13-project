@@ -9,16 +9,16 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-EMBEDDING_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = EMBEDDING_DIR.parent
-load_dotenv(EMBEDDING_DIR / ".env")
+RAG_DIR = Path(__file__).resolve().parents[1]
+PROJECT_DIR = RAG_DIR.parents[1]
+load_dotenv(RAG_DIR / ".env")
 
 
 @dataclass(frozen=True)
 class Settings:
     documents_path: Path = PROJECT_DIR / "data" / "policies_rag_docs.json"
     policies_path: Path = PROJECT_DIR / "data" / "policies_structured.json"
-    storage_dir: Path = EMBEDDING_DIR / "storage"
+    storage_dir: Path = RAG_DIR / "storage"
     model_name: str = os.getenv(
         "EMBEDDING_MODEL",
         "BAAI/bge-m3",

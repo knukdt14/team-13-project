@@ -1,6 +1,6 @@
 import unittest
 
-from embedding.condition_extractor import ConditionExtractor
+from src.rag.eligibility import ConditionExtractor
 
 
 class ConditionExtractorTest(unittest.TestCase):

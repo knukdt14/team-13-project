@@ -1,10 +1,25 @@
 # BGE-M3 + Solar 청년정책 검색·터미널 챗봇
 
-다른 팀원의 파일을 수정하지 않고 `embedding` 폴더 안에서만 동작한다. PDF는
+다른 팀원의 파일을 수정하지 않고 `src/rag` 폴더 안에서만 동작한다. PDF는
 사용하지 않으며 다음 JSON만 읽는다.
 
 - `../data/policies_rag_docs.json`: 검색 문서 2,693건
 - `../data/policies_structured.json`: 조건 필터와 응답 메타데이터
+
+## 폴더 구조
+
+```text
+src/
+└── rag/
+    ├── retriever.py      # BGE-M3 + BM25 하이브리드 Top-K 검색
+    ├── generator.py      # Solar 답변 생성과 스트리밍
+    ├── eligibility.py    # 질문 조건 추출과 정책 자격 판정 공개 모듈
+    ├── prompts.py        # Solar 시스템 프롬프트
+    ├── core/             # 설정, 데이터 로더, GPU, 검색 보조 구현
+    ├── cli/              # 인덱스 생성, 검색 점검, 터미널 챗봇
+    ├── storage/          # FAISS 인덱스와 청크 메타데이터
+    └── tests/            # 조건 추출, 필터링, 하이브리드 검색 테스트
+```
 
 ## 구현 범위
 
@@ -35,10 +50,10 @@
 ## GPU 환경
 
 공유 수업 환경은 수정하지 않았다. GPU 패키지는 Git에서 제외되는
-`embedding/.venv-gpu`가 사용한다.
+`src/rag/.venv-gpu`가 사용한다.
 
 ```cmd
-embedding\.venv-gpu\Scripts\python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+src\rag\.venv-gpu\Scripts\python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
 현재 확인값:
@@ -50,14 +65,14 @@ embedding\.venv-gpu\Scripts\python.exe -c "import torch; print(torch.__version__
 환경을 새로 만드는 경우 CUDA PyTorch가 설치된 `TF_ENV`를 먼저 활성화한 뒤:
 
 ```cmd
-python -m venv --system-site-packages embedding\.venv-gpu
-embedding\.venv-gpu\Scripts\python.exe -m pip install -r embedding\requirements.txt
-embedding\.venv-gpu\Scripts\python.exe -m pip install "transformers>=5.0,<6.0"
+python -m venv --system-site-packages src\rag\.venv-gpu
+src\rag\.venv-gpu\Scripts\python.exe -m pip install -r requirements.txt
+src\rag\.venv-gpu\Scripts\python.exe -m pip install "transformers>=5.0,<6.0"
 ```
 
 ## API 키
 
-실제 키는 Git에서 제외된 `embedding/.env`에 저장되어 있다.
+실제 키는 Git에서 제외된 `src/rag/.env`에 저장되어 있다.
 
 ```dotenv
 UPSTAGE_API_KEY=발급받은_키
@@ -73,16 +88,16 @@ EMBEDDING_DEVICE=cuda
 프로젝트 루트에서 다음 한 줄을 실행한다.
 
 ```cmd
-embedding\.venv-gpu\Scripts\python.exe -m embedding.terminal_chatbot
+src\rag\.venv-gpu\Scripts\python.exe -m src.rag.cli.terminal_chatbot
 ```
 
 또는 실행 도우미를 사용한다.
 
 ```cmd
-embedding\run_chatbot.cmd
+src\rag\cli\run_chatbot.cmd
 ```
 
-현재 위치가 `embedding` 폴더라면 파일을 직접 실행해도 된다. 다른 Python
+현재 위치가 `src\rag\cli` 폴더라면 파일을 직접 실행해도 된다. 다른 Python
 환경에서 실행한 경우에도 `.venv-gpu`가 있으면 GPU 환경으로 자동 전환된다.
 
 ```cmd
@@ -100,16 +115,16 @@ python terminal_chatbot.py
 질문 한 건만 테스트하고 종료할 수도 있다.
 
 ```cmd
-embedding\run_chatbot.cmd --include-closed --question "부산에 사는 28살 미취업자인데 주거 정책 알려줘"
+src\rag\cli\run_chatbot.cmd --include-closed --question "부산에 사는 28살 미취업자인데 주거 정책 알려줘"
 ```
 
 ## 인덱스 생성
 
-BGE-M3 인덱스는 이미 `embedding/storage`에 생성되어 있다. 정책 데이터나
+BGE-M3 인덱스는 이미 `src/rag/storage`에 생성되어 있다. 정책 데이터나
 임베딩 모델이 바뀐 경우에만 다시 실행한다.
 
 ```cmd
-embedding\.venv-gpu\Scripts\python.exe -m embedding.build_index --device cuda --batch-size 4 --max-seq-length 1024
+src\rag\.venv-gpu\Scripts\python.exe -m src.rag.cli.build_index --device cuda --batch-size 4 --max-seq-length 1024
 ```
 
 현재 인덱스:
@@ -123,9 +138,9 @@ embedding\.venv-gpu\Scripts\python.exe -m embedding.build_index --device cuda --
 ## 검색 모드 비교
 
 ```cmd
-embedding\.venv-gpu\Scripts\python.exe -m embedding.search_cli "부산 청년 주거 지원" --mode vector --top-k 5
-embedding\.venv-gpu\Scripts\python.exe -m embedding.search_cli "부산 청년 주거 지원" --mode bm25 --top-k 5
-embedding\.venv-gpu\Scripts\python.exe -m embedding.search_cli "부산 청년 주거 지원" --mode hybrid --top-k 5
+src\rag\.venv-gpu\Scripts\python.exe -m src.rag.cli.search_cli "부산 청년 주거 지원" --mode vector --top-k 5
+src\rag\.venv-gpu\Scripts\python.exe -m src.rag.cli.search_cli "부산 청년 주거 지원" --mode bm25 --top-k 5
+src\rag\.venv-gpu\Scripts\python.exe -m src.rag.cli.search_cli "부산 청년 주거 지원" --mode hybrid --top-k 5
 ```
 
 기본적으로 마감 정책은 제외된다. 마감까지 보려면 `--include-closed`를 붙인다.
@@ -133,7 +148,7 @@ embedding\.venv-gpu\Scripts\python.exe -m embedding.search_cli "부산 청년 �
 ## 백엔드 호출 계약
 
 ```python
-from embedding import PolicyRetriever
+from src.rag import PolicyRetriever
 
 retriever = PolicyRetriever()  # 서버 lifespan에서 한 번만 생성
 
@@ -175,7 +190,7 @@ result = retriever.search(
 ```
 
 ```cmd
-embedding\.venv-gpu\Scripts\python.exe -m embedding.build_index --documents data\policy_chunks.jsonl --device cuda
+src\rag\.venv-gpu\Scripts\python.exe -m src.rag.cli.build_index --documents data\policy_chunks.jsonl --device cuda
 ```
 
 같은 정책의 여러 청크가 검색돼도 `policy_id` 기준으로 한 정책만 반환한다.
@@ -183,5 +198,5 @@ embedding\.venv-gpu\Scripts\python.exe -m embedding.build_index --documents data
 ## 테스트
 
 ```cmd
-embedding\.venv-gpu\Scripts\python.exe -m unittest discover -s embedding\tests -v
+src\rag\.venv-gpu\Scripts\python.exe -m unittest discover -s src\rag\tests -v
 ```

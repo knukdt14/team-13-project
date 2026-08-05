@@ -2,8 +2,15 @@
 
 import argparse
 import json
+from pathlib import Path
+import sys
 
-from .retriever import PolicyRetriever
+try:
+    from ..retriever import PolicyRetriever
+except ImportError:  # python src/rag/cli/search_cli.py 직접 실행도 지원
+    project_dir = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(project_dir))
+    from src.rag.retriever import PolicyRetriever
 
 
 def main() -> None:

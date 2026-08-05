@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -14,13 +15,15 @@ import torch
 from sentence_transformers import SentenceTransformer
 
 try:
-    from .config import DEFAULT_SETTINGS
-    from .data_loader import load_documents
-    from .device import describe_device, resolve_device
-except ImportError:  # python embedding/build_index.py 실행도 지원
-    from config import DEFAULT_SETTINGS
-    from data_loader import load_documents
-    from device import describe_device, resolve_device
+    from ..core.config import DEFAULT_SETTINGS
+    from ..core.data_loader import load_documents
+    from ..core.device import describe_device, resolve_device
+except ImportError:  # python src/rag/cli/build_index.py 직접 실행도 지원
+    project_dir = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(project_dir))
+    from src.rag.core.config import DEFAULT_SETTINGS
+    from src.rag.core.data_loader import load_documents
+    from src.rag.core.device import describe_device, resolve_device
 
 
 def build_index(

@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
-import os
 from pathlib import Path
 import subprocess
 import sys
@@ -16,16 +14,16 @@ def _bootstrap_direct_execution() -> None:
     if __package__:
         return
 
-    embedding_dir = Path(__file__).resolve().parent
-    project_dir = embedding_dir.parent
-    gpu_python = embedding_dir / ".venv-gpu" / "Scripts" / "python.exe"
+    rag_dir = Path(__file__).resolve().parents[1]
+    project_dir = rag_dir.parents[1]
+    gpu_python = rag_dir / ".venv-gpu" / "Scripts" / "python.exe"
 
     if gpu_python.exists() and Path(sys.executable).resolve() != gpu_python.resolve():
         completed = subprocess.run(
             [
                 str(gpu_python),
                 "-m",
-                "embedding.terminal_chatbot",
+                "src.rag.cli.terminal_chatbot",
                 *sys.argv[1:],
             ],
             cwd=project_dir,
@@ -39,39 +37,16 @@ def _bootstrap_direct_execution() -> None:
 
 _bootstrap_direct_execution()
 
-from dotenv import load_dotenv
-from openai import OpenAI, OpenAIError
+from openai import OpenAIError
 
 if __package__:
-    from .config import EMBEDDING_DIR
-    from .retriever import PolicyRetriever
+    from ..generator import SolarGenerator
+    from ..prompts import FOLLOW_UP_HINTS
+    from ..retriever import PolicyRetriever
 else:
-    from embedding.config import EMBEDDING_DIR
-    from embedding.retriever import PolicyRetriever
-
-
-SYSTEM_PROMPT = """당신은 대한민국 청년정책 안내 챗봇입니다.
-아래 원칙을 반드시 지키세요.
-1. 제공된 검색 결과만 근거로 답하고, 자료에 없는 사실은 추측하지 마세요.
-2. 사용자 조건과 맞는 이유, 지원 내용, 신청 기간과 방법을 이해하기 쉽게 설명하세요.
-3. 근거 정책을 문장 끝에 [정책 1]처럼 표시하세요.
-4. 신청 자격은 최종 확정이 아니므로 공식 신청 페이지에서 확인하도록 안내하세요.
-5. 정책 자료가 서로 충돌하거나 정보가 없으면 그 사실을 솔직하게 말하세요.
-6. 한국어로 간결하고 친절하게 답하세요.
-"""
-
-FOLLOW_UP_HINTS = (
-    "그중",
-    "그 정책",
-    "이 정책",
-    "첫 번째",
-    "두 번째",
-    "신청 방법",
-    "어떻게 신청",
-    "언제까지",
-    "자세히",
-    "링크",
-)
+    from src.rag.generator import SolarGenerator
+    from src.rag.prompts import FOLLOW_UP_HINTS
+    from src.rag.retriever import PolicyRetriever
 
 
 class TerminalPolicyChatbot:
@@ -81,19 +56,8 @@ class TerminalPolicyChatbot:
         include_closed: bool = False,
         mode: str = "hybrid",
     ) -> None:
-        load_dotenv(EMBEDDING_DIR / ".env")
-        api_key = os.getenv("UPSTAGE_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "UPSTAGE_API_KEY가 없습니다. embedding/.env 파일을 확인하세요."
-            )
-
-        self.solar_model = os.getenv("UPSTAGE_MODEL", "solar-pro3")
-        self.client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.upstage.ai/v1",
-        )
         self.retriever = PolicyRetriever()
+        self.generator = SolarGenerator()
         self.top_k = top_k
         self.include_closed = include_closed
         self.mode = mode
@@ -122,33 +86,18 @@ class TerminalPolicyChatbot:
             self.previous_question = question
             return
 
-        context = self._format_context(policies)
-        user_prompt = (
-            f"사용자의 실제 질문:\n{question}\n\n"
-            f"검색에 사용된 조건:\n"
-            f"{json.dumps(result['extracted_conditions'], ensure_ascii=False)}\n\n"
-            f"검색된 정책 자료:\n{context}"
-        )
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            *self.history[-6:],
-            {"role": "user", "content": user_prompt},
-        ]
-
         print("\nSolar: ", end="", flush=True)
         answer_parts: list[str] = []
         try:
-            stream = self.client.chat.completions.create(
-                model=self.solar_model,
-                messages=messages,
-                stream=True,
-                temperature=0.2,
+            stream = self.generator.stream_answer(
+                question,
+                result["extracted_conditions"],
+                policies,
+                self.history,
             )
-            for chunk in stream:
-                content = chunk.choices[0].delta.content
-                if content:
-                    answer_parts.append(content)
-                    print(content, end="", flush=True)
+            for content in stream:
+                answer_parts.append(content)
+                print(content, end="", flush=True)
         except OpenAIError as error:
             print(f"Solar API 호출에 실패했습니다: {error}")
             return
@@ -169,33 +118,6 @@ class TerminalPolicyChatbot:
         if self.previous_question and (is_follow_up or len(question.strip()) <= 15):
             return f"{self.previous_question}\n후속 질문: {question}"
         return question
-
-    @staticmethod
-    def _format_context(policies: list[dict[str, Any]]) -> str:
-        blocks: list[str] = []
-        for number, policy in enumerate(policies, start=1):
-            metadata = policy["metadata"]
-            text = str(policy.get("matched_text") or "")[:4000]
-            blocks.append(
-                "\n".join(
-                    [
-                        f"[정책 {number}]",
-                        f"정책 ID: {policy['policy_id']}",
-                        f"정책명: {policy['policy_name']}",
-                        f"유사도: {policy['score']}",
-                        f"신청 기간: {metadata.get('application_start')} ~ "
-                        f"{metadata.get('application_end')}",
-                        f"접수 상태: {'접수 중' if metadata.get('is_open') else '마감/접수 전'}",
-                        f"운영 기관: {metadata.get('organization')}",
-                        f"소득 조건: {metadata.get('income_condition')} / "
-                        f"{metadata.get('income_details')}",
-                        f"신청 URL: {metadata.get('application_url')}",
-                        f"참고 URL: {metadata.get('reference_url')}",
-                        f"정책 내용:\n{text}",
-                    ]
-                )
-            )
-        return "\n\n".join(blocks)[:18000]
 
     @staticmethod
     def _print_search_summary(result: dict[str, Any]) -> None:

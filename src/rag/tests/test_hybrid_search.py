@@ -1,6 +1,6 @@
 import unittest
 
-from embedding.hybrid_search import BM25Search, reciprocal_rank_fusion, tokenize
+from src.rag.core.hybrid_search import BM25Search, reciprocal_rank_fusion, tokenize
 
 
 class HybridSearchTest(unittest.TestCase):
