@@ -1,4 +1,17 @@
-"""정책 본문과 스칼라 메타데이터를 Chroma에 적재한다."""
+"""정책 본문과 스칼라 메타데이터를 Chroma에 적재한다.
+
+⚠️ 현재 쓰이지 않는다. 삭제 대상이다.
+
+이 파일은 정식 구조를 잡을 때 "ingest 가 벡터DB에 적재한다"는 가정으로
+만들었다. 실제로는 박준혁이 `src/rag/cli/build_index.py` 에서 FAISS 인덱스를
+직접 만든다. 벡터 저장소도 Chroma 가 아니라 FAISS 다.
+
+`chromadb` 는 어느 requirements 에도 없고 설치돼 있지도 않다. 그래서
+`src/ingest/cli.py` 의 index 명령은 지금 ImportError 로 죽는다.
+
+ingest 의 책임은 `data/policies_rag_docs.json` 까지다. 인덱싱은 rag 가 맡는다.
+이 파일과 `cli.py` 의 index 명령을 지울지 김영민이 판단한다.
+"""
 
 from __future__ import annotations
 

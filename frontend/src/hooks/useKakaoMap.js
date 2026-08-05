@@ -15,7 +15,12 @@ function loadSdk() {
     const script = document.createElement('script')
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KEY}&autoload=false`
     script.onload = () => window.kakao.maps.load(() => resolve(window.kakao))
-    script.onerror = () => reject(new Error('카카오맵을 불러오지 못했어요. 키와 도메인 등록을 확인해주세요.'))
+    // vite 는 5173 이 막혀 있으면 5174, 5175 로 옮겨간다. 카카오는 등록된
+    // 도메인에서만 동작하므로 포트가 밀리면 여기서 실패한다.
+    // 지금 열려 있는 주소를 그대로 알려줘서 무엇을 등록해야 할지 보이게 한다.
+    script.onerror = () => reject(new Error(
+      `카카오맵을 불러오지 못했어요. 개발자 콘솔의 사이트 도메인에 ${window.location.origin} 이 등록돼 있는지 확인해주세요.`,
+    ))
     document.head.appendChild(script)
   })
   return sdkPromise

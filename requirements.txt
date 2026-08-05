@@ -1,13 +1,32 @@
-faiss-cpu>=1.8.0
-numpy>=1.26.0
-sentence-transformers>=3.0.0
-transformers>=5.0,<6.0
-openai>=1.52.2
-python-dotenv>=1.0.1
-rank-bm25>=0.2.2
+# 로컬에서 세 서비스(api · ai · ingest)를 한 파이썬 환경으로 돌릴 때 쓴다.
+# 컨테이너별로 나눈 것은 requirements.api.txt / requirements.ai.txt 를 본다.
+#
+#   python -m venv .venv
+#   .venv\Scripts\activate          (Windows)
+#   pip install -r requirements.txt
+
+# ── 웹 공통 ────────────────────────────────────────────────
 fastapi
 uvicorn[standard]
 pydantic-settings
 python-multipart
-pypdf
-easyocr
+httpx                      # backend → ai 서비스 호출 (스트리밍 지원)
+
+# ── 검색·생성 (src/rag, src/ai) ────────────────────────────
+faiss-cpu>=1.8.0
+numpy>=1.26.0
+sentence-transformers>=3.0.0
+transformers>=5.0,<6.0
+rank-bm25>=0.2.2
+openai>=1.52.2             # Upstage Solar (OpenAI 호환 API)
+python-dotenv>=1.0.1
+
+# ── 문서·이미지 처리 ───────────────────────────────────────
+pypdf                      # PDF 첨부 파싱
+easyocr                    # 포스터 이미지 OCR
+pillow                     # OCR 전처리 (easyocr 가 요구)
+
+# ── 데이터 수집 (src/ingest) ───────────────────────────────
+requests                   # 온통청년 API 호출
+openpyxl                   # 코드정의 엑셀 읽기
+fpdf2                      # 정책 데이터 PDF 출력
