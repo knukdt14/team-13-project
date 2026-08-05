@@ -25,6 +25,11 @@ class InvalidFileError(ServiceError):
     code = "invalid_file"
 
 
+class RAGUnavailableError(ServiceError):
+    status_code = 503
+    code = "rag_unavailable"
+
+
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ServiceError)
     async def service_error_handler(_: Request, error: ServiceError) -> JSONResponse:

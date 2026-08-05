@@ -25,7 +25,9 @@ class Repository:
             "INSERT INTO messages(session_id, role, content, sources_json) VALUES (?, ?, ?, ?)",
             (session_id, role, content, json.dumps([item.model_dump() for item in sources or []], ensure_ascii=False)),
         )
-        return int(cursor.lastrowid)
+        if cursor.lastrowid is None:
+            raise RuntimeError("메시지 ID를 만들지 못했어요.")
+        return cursor.lastrowid
 
     def messages(self, session_id: str) -> list[Message]:
         rows = self.database.execute(

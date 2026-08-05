@@ -6,24 +6,42 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import logging
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.backend.config import settings
 from src.backend.errors import install_error_handlers
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    """프로세스당 한 번 DB를 준비한다. RAG 실모델도 이 경계에서 준비한다."""
+async def lifespan(application: FastAPI):
+    """DB와 무거운 RAG 객체를 프로세스당 한 번만 준비한다."""
     from src.backend.db.database import initialize_database
-    from src.rag import USE_STUB
 
     initialize_database()
-    if USE_STUB:
-        from src.rag.stub import load_policies
+    application.state.retriever = None
+    application.state.generator = None
+    application.state.retriever_error = None
+    application.state.generator_error = None
+    try:
+        from src.rag.retriever import PolicyRetriever
 
-        load_policies()
+        application.state.retriever = PolicyRetriever()
+    except Exception as error:
+        application.state.retriever_error = str(error)
+        logger.warning("PolicyRetriever를 준비하지 못했습니다: %s", error)
+    try:
+        from src.rag.generator import SolarGenerator
+
+        application.state.generator = SolarGenerator()
+    except Exception as error:
+        # API 키가 없어도 목록·메타·지도와 앱 기동은 정상이어야 한다.
+        application.state.generator_error = str(error)
+        logger.warning("SolarGenerator를 준비하지 못했습니다: %s", error)
     yield
 
 

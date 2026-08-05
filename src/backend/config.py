@@ -1,23 +1,23 @@
 """백엔드 환경변수 설정."""
 
-from __future__ import annotations
-
-import os
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.shared.paths import APP_DB, CHROMA_DIR, PROJECT_ROOT
 
 
-@dataclass(frozen=True)
-class Settings:
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     app_name: str = "청년정책도우미 API"
-    db_path: Path = Path(os.getenv("DB_PATH", APP_DB)).resolve()
-    chroma_dir: Path = Path(os.getenv("CHROMA_DIR", CHROMA_DIR)).resolve()
-    rag_stub: bool = os.getenv("RAG_STUB", "true").lower() == "true"
-    frontend_dist: Path = Path(
-        os.getenv("FRONTEND_DIST", PROJECT_ROOT / "frontend" / "dist")
-    ).resolve()
+    db_path: Path = APP_DB
+    chroma_dir: Path = CHROMA_DIR
+    frontend_dist: Path = PROJECT_ROOT / "frontend" / "dist"
 
 
 settings = Settings()

@@ -22,7 +22,9 @@ class ErrorResponse(BaseModel):
 class HealthResponse(BaseModel):
     ok: bool = True
     policies: int = 0
-    rag_mode: str = "stub"
+    rag_mode: str = "unavailable"
+    retriever_ready: bool = False
+    generator_ready: bool = False
 
 
 class Page(BaseModel, Generic[T]):
