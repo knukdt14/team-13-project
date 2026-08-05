@@ -11,7 +11,9 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from .core.config import RAG_DIR
-from .prompts import SYSTEM_PROMPT
+from .prompts import ATTACHMENT_MODE_HINT, SYSTEM_PROMPT
+
+ATTACHMENT_POLICY_ID = "attachment"
 
 
 class SolarGenerator:
@@ -34,14 +36,25 @@ class SolarGenerator:
         history: Sequence[dict[str, str]] = (),
     ) -> Iterator[str]:
         """최근 대화와 검색 정책을 전달하고 답변 조각을 순서대로 반환한다."""
+        attachments = [item for item in policies if item.get("policy_id") == ATTACHMENT_POLICY_ID]
+        search_hits = [item for item in policies if item.get("policy_id") != ATTACHMENT_POLICY_ID]
+
+        context_sections = []
+        if attachments:
+            context_sections.append(f"[첨부 문서]\n{self._format_attachments(attachments)}")
+        if search_hits:
+            context_sections.append(f"[검색된 정책]\n{self._format_context(search_hits)}")
+        context_text = "\n\n".join(context_sections) if context_sections else "근거 자료 없음"
+
         user_prompt = (
             f"사용자의 실제 질문:\n{question}\n\n"
             "검색에 사용된 조건:\n"
             f"{json.dumps(conditions, ensure_ascii=False)}\n\n"
-            f"검색된 정책 자료:\n{self._format_context(policies)}"
+            f"{context_text}"
         )
+        system_prompt = SYSTEM_PROMPT + ATTACHMENT_MODE_HINT if attachments else SYSTEM_PROMPT
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             *history[-6:],
             {"role": "user", "content": user_prompt},
         ]
@@ -55,6 +68,11 @@ class SolarGenerator:
             content = chunk.choices[0].delta.content
             if content:
                 yield content
+
+    @staticmethod
+    def _format_attachments(attachments: list[dict[str, Any]]) -> str:
+        blocks = [str(item.get("matched_text") or "")[:4000] for item in attachments]
+        return "\n\n---\n\n".join(block for block in blocks if block)
 
     @staticmethod
     def _format_context(policies: list[dict[str, Any]]) -> str:
