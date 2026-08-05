@@ -1,87 +1,184 @@
-"""Open API 원본을 검색·필터용 구조로 정리한다."""
-
-from __future__ import annotations
-
 import json
+import os
+import html
 import re
-from datetime import datetime
 
-from src.ingest.collect import _atomic_json
-from src.ingest.config import IngestSettings, settings
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data")
+os.makedirs(DATA_DIR, exist_ok=True)
 
-CODE_FIELDS = ("mrgSttsCd", "earnCndSeCd", "aplyPrdSeCd", "bizPrdSeCd", "pvsnInstGroupCd", "plcyPvsnMthdCd", "plcyAprvSttsCd")
-LIST_CODE_FIELDS = ("sbizCd", "jobCd", "schoolCd", "plcyMajorCd")
+# 읽기
+with open(os.path.join(DATA_DIR, "youth_policies_raw.json"), encoding="utf-8") as f:
+    all_policies = json.load(f)
+
+with open(os.path.join(DATA_DIR, "code_definitions.json"), encoding="utf-8") as f:
+    CODE_DEFS = json.load(f)
+
+FILTER_FIELDS = [
+    "plcyNo", "plcyNm", "plcyKywdNm", "lclsfNm", "mclsfNm",
+    "sprtTrgtMinAge", "sprtTrgtMaxAge", "sprtTrgtAgeLmtYn",
+    "mrgSttsCd", "earnCndSeCd", "earnMinAmt", "earnMaxAmt", "earnEtcCn",
+    "zipCd", "sbizCd", "jobCd", "schoolCd", "plcyMajorCd",
+    "aplyYmd", "aplyPrdSeCd", "bizPrdSeCd", "bizPrdBgngYmd", "bizPrdEndYmd", "bizPrdEtcCn",
+    "pvsnInstGroupCd", "plcyPvsnMthdCd", "plcyAprvSttsCd",
+    "sprvsnInstCd", "sprvsnInstCdNm", "sprvsnInstPicNm",
+    "operInstCd", "operInstCdNm", "operInstPicNm",
+    "rgtrInstCd", "rgtrInstCdNm", "rgtrUpInstCd", "rgtrUpInstCdNm",
+    "rgtrHghrkInstCd", "rgtrHghrkInstCdNm",
+    "sprtSclLmtYn", "sprtSclCnt", "sprtArvlSeqYn",
+    "aplyUrlAddr", "refUrlAddr1", "refUrlAddr2",
+    "inqCnt", "frstRegDt", "lastMdfcnDt",
+]
+
+# 단일 코드값 필드 -> 디코딩된 이름 필드로 추가
+SINGLE_CODE_FIELDS = ["mrgSttsCd", "earnCndSeCd", "aplyPrdSeCd", "bizPrdSeCd",
+                       "pvsnInstGroupCd", "plcyPvsnMthdCd", "plcyAprvSttsCd"]
+# 콤마로 여러 값이 들어올 수 있는 코드값 필드 -> 리스트로 쪼개고 디코딩
+MULTI_CODE_FIELDS = ["sbizCd", "jobCd", "schoolCd", "plcyMajorCd"]
+
+# 관공서 문서 특유의 장식용 불릿/기호 (RAG 임베딩에 노이즈만 됨)
+DECORATIVE_CHARS = "○❍ㅇ▶▷▪◦□✿☞▸✔✓★☆◎‧․ㆍ※‣▴•*'\"‘’“”"
+CIRCLED_NUMBERS = {ch: f"{i}." for i, ch in enumerate("①②③④⑤⑥⑦⑧⑨⑩", start=1)}
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"  # 이모지
+    "\U00002600-\U000027BF"  # 기타 심볼/딩뱃
+    "\U0001F000-\U0001F0FF"
+    "\U00002190-\U000021FF"  # 화살표
+    "\U0000E000-\U0000F8FF"  # 사설 영역(PUA) - 워드/한글 문서에서 깨져 들어온 글리프
+    "]+"
+)
 
 
-def _split(value: object) -> list[str]:
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    return [item.strip() for item in re.split(r"[,|]", str(value or "")) if item.strip()]
+def unescape_html(text):
+    # 원본이 이중 인코딩된 경우가 있어서(&amp;bull; 등) 변화가 없을 때까지 반복 해제
+    prev = None
+    while prev != text:
+        prev = text
+        text = html.unescape(text)
+    return text
 
 
-def _date(value: str | None) -> str | None:
-    digits = re.sub(r"\D", "", value or "")[:8]
-    if len(digits) != 8:
+# "값 없음"을 뜻하는 플레이스홀더 (실제 정보인 "별도 문의"/"공고문 참조" 등은 포함하지 않음)
+EMPTY_PLACEHOLDERS = {"-", "--", "해당없음", "해당 없음", "제한없음", "제한 없음", "."}
+
+
+def clean_text(text):
+    if not text:
+        return ""
+    if text.strip() in EMPTY_PLACEHOLDERS:
+        return ""
+    text = unescape_html(text)
+    for ch, num in CIRCLED_NUMBERS.items():
+        text = text.replace(ch, num)    # ①②③ -> 1. 2. 3. (순서 정보는 유지)
+    text = EMOJI_PATTERN.sub("", text)  # 이모지, 화살표, 깨진 글리프 제거
+    text = text.replace("/*", " ")      # 원문 주석 표기(/* ...) 제거
+    text = text.translate({ord(ch): None for ch in DECORATIVE_CHARS})  # 장식 기호 제거 (별표 포함)
+    text = re.sub(r'\s+[-·]\s+', '. ', text)  # 줄바꿈 제거로 뭉개진 리스트 항목 구분자 -> 문장 구분
+    text = re.sub(r':\s*\.\s*', ': ', text)   # '라벨: .' 같은 어색한 잔재 정리
+    text = re.sub(r'\.{2,}', '.', text)       # 중복 마침표 정리
+    text = re.sub(r'\s+', ' ', text)    # 연속 공백 정리
+    return text.strip()
+
+
+def clean_field(value):
+    if value is None:
         return None
-    try:
-        return datetime.strptime(digits, "%Y%m%d").date().isoformat()
-    except ValueError:
+    v = unescape_html(value.strip())
+    if not v or v in EMPTY_PLACEHOLDERS:
+        return None                     # 공백이거나 '-' 같은 플레이스홀더면 None으로
+    return v
+
+
+def decode_code(field, code):
+    return CODE_DEFS.get(field, {}).get(code, code)
+
+
+# 코드/URL/날짜성 필드가 아니라 자유서술형 텍스트라 clean_text()로 장식기호까지 정리해야 하는 필드
+FREE_TEXT_FIELDS = {"bizPrdEtcCn", "earnEtcCn"}
+
+
+def clean_structured_field(field, value):
+    if value is None:
         return None
+    if field in FREE_TEXT_FIELDS:
+        cleaned = clean_text(value)
+        return cleaned if cleaned else None
+    return clean_field(value)
 
 
-def _periods(value: str | None) -> list[dict[str, str]]:
-    values = re.findall(r"\d{4}[.\-/]?\d{2}[.\-/]?\d{2}", value or "")
-    dates = [parsed for item in values if (parsed := _date(item))]
-    return [
-        {"start": dates[index], "end": dates[index + 1]}
-        for index in range(0, len(dates) - 1, 2)
-    ]
+def parse_aply_ymd(value):
+    # "20260723 ~ 20260806" -> {aplyStartYmd, aplyEndYmd, aplyPeriods}
+    # 드물게 "\N"으로 여러 기간이 붙는 경우(연간 반복 등)도 있어서 전부 파싱
+    if not value:
+        return {"aplyStartYmd": None, "aplyEndYmd": None, "aplyPeriods": []}
+
+    periods = []
+    for chunk in value.split("\\N"):
+        m = re.match(r"^(\d{8})\s*~\s*(\d{8})$", chunk.strip())
+        if not m:
+            continue
+        start, end = m.groups()
+        periods.append({
+            "start": f"{start[:4]}-{start[4:6]}-{start[6:]}",
+            "end": f"{end[:4]}-{end[4:6]}-{end[6:]}",
+        })
+
+    if not periods:
+        return {"aplyStartYmd": None, "aplyEndYmd": None, "aplyPeriods": []}
+
+    return {
+        "aplyStartYmd": min(p["start"] for p in periods),
+        "aplyEndYmd": max(p["end"] for p in periods),
+        "aplyPeriods": periods,
+    }
 
 
-def _category(value: object) -> str:
-    seen: list[str] = []
-    for item in _split(value):
-        if item not in seen:
-            seen.append(item)
-    return ",".join(seen)
+def section(value):
+    # RAG 텍스트용: 값 없으면 "없음"으로 명시 (라벨 자체를 없애면 "정보가 없다"는 신호가 사라짐)
+    return clean_text(value) or "없음"
 
 
-def normalize_policy(raw: dict, definitions: dict[str, dict[str, str]]) -> dict:
-    policy = dict(raw)
-    policy["plcyNo"] = str(policy.get("plcyNo") or "")
-    policy["lclsfNm"] = _category(policy.get("lclsfNm"))
-    policy["zipCdList"] = _split(policy.get("zipCdList") or policy.get("zipCd"))
+structured_data = []
+rag_documents = []
 
-    for field in CODE_FIELDS:
-        code = str(policy.get(field) or "")
-        policy[f"{field}Nm"] = definitions.get(field, {}).get(code, policy.get(f"{field}Nm"))
+for p in all_policies:
+    # 구조화 데이터 만들 때
+    row = {k: clean_structured_field(k, p.get(k)) for k in FILTER_FIELDS}
+    row["zipCdList"] = row["zipCd"].split(",") if row.get("zipCd") else []  # 지역코드 리스트화
+    row.update(parse_aply_ymd(row.get("aplyYmd")))
 
-    for field in LIST_CODE_FIELDS:
-        codes = _split(policy.get(f"{field}List") or policy.get(field))
-        policy[f"{field}List"] = codes
-        policy[f"{field}NmList"] = [
-            definitions.get(field, {}).get(code, code) for code in codes
-        ]
+    for field in SINGLE_CODE_FIELDS:
+        row[f"{field}Nm"] = decode_code(field, row[field]) if row.get(field) else None
 
-    periods = policy.get("aplyPeriods") or _periods(policy.get("aplyYmd"))
-    policy["aplyPeriods"] = periods
-    policy["aplyStartYmd"] = policy.get("aplyStartYmd") or (periods[0]["start"] if periods else None)
-    policy["aplyEndYmd"] = policy.get("aplyEndYmd") or (periods[-1]["end"] if periods else None)
-    return policy
+    for field in MULTI_CODE_FIELDS:
+        codes = row[field].split(",") if row.get(field) else []
+        row[f"{field}List"] = codes
+        row[f"{field}NmList"] = [decode_code(field, c) for c in codes]
 
+    structured_data.append(row)
 
-def normalize_policies(config: IngestSettings = settings) -> list[dict]:
-    raw = json.loads(config.raw_path.read_text(encoding="utf-8"))
-    definitions = json.loads(config.code_definitions_path.read_text(encoding="utf-8"))
-    policies = [normalize_policy(item, definitions) for item in raw if item.get("plcyNo")]
-    _atomic_json(config.structured_path, policies)
-    return policies
+    # 신청기간: 날짜 있으면 그 기간, 없으면 상시/마감 같은 구분명, 그것도 없으면 "없음"
+    if row.get("aplyStartYmd") and row.get("aplyEndYmd"):
+        aply_period_text = f"{row['aplyStartYmd']} ~ {row['aplyEndYmd']}"
+    else:
+        aply_period_text = row.get("aplyPrdSeCdNm") or "없음"
 
+    # RAG 텍스트 만들 때 clean_text 적용
+    text = f"""정책명: {section(p.get('plcyNm'))}
+정책설명: {section(p.get('plcyExplnCn'))}
+지원내용: {section(p.get('plcySprtCn'))}
+신청기간: {aply_period_text}
+신청방법: {section(p.get('plcyAplyMthdCn'))}
+추가자격조건: {section(p.get('addAplyQlfcCndCn'))}
+참여제한대상: {section(p.get('ptcpPrpTrgtCn'))}
+제출서류: {section(p.get('sbmsnDcmntCn'))}"""
+    rag_documents.append({"plcyNo": p.get("plcyNo"), "text": text.strip()})
 
-def main() -> None:
-    policies = normalize_policies()
-    print(f"정규화 완료: {len(policies):,}건 → {settings.structured_path}")
+# 저장
+with open(os.path.join(DATA_DIR, "policies_structured.json"), "w", encoding="utf-8") as f:
+    json.dump(structured_data, f, ensure_ascii=False, indent=2)
 
+with open(os.path.join(DATA_DIR, "policies_rag_docs.json"), "w", encoding="utf-8") as f:
+    json.dump(rag_documents, f, ensure_ascii=False, indent=2)
 
-if __name__ == "__main__":
-    main()
+print(f"구조화 데이터 {len(structured_data)}건, RAG 문서 {len(rag_documents)}건 저장 완료")

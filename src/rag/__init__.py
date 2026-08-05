@@ -1,23 +1,17 @@
-"""RAG 공개 인터페이스.
+"""청년정책 RAG(조건 추출, 검색, Solar 생성) 패키지."""
 
-박준혁의 실제 구현이 들어오기 전에는 ``RAG_STUB=true``가 검증용 스텁을 연결한다.
-"""
+from typing import TYPE_CHECKING, Any
 
-from __future__ import annotations
+if TYPE_CHECKING:
+    from .retriever import PolicyRetriever
 
-import os
-
-from src.rag import stub
-
-USE_STUB = os.getenv("RAG_STUB", "true").lower() == "true"
+__all__ = ["PolicyRetriever"]
 
 
-def _real_not_available(*_args, **_kwargs):
-    raise RuntimeError("실제 RAG 구현이 아직 연결되지 않았습니다. RAG_STUB=true를 사용하세요.")
+def __getattr__(name: str) -> Any:
+    """공개 검색기를 실제 사용 시점에 불러와 패키지 import를 가볍게 유지한다."""
+    if name == "PolicyRetriever":
+        from .retriever import PolicyRetriever
 
-
-search = stub.search if USE_STUB else _real_not_available
-answer = stub.answer if USE_STUB else _real_not_available
-stream_answer = stub.stream_answer if USE_STUB else _real_not_available
-
-__all__ = ["USE_STUB", "answer", "search", "stream_answer"]
+        return PolicyRetriever
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
