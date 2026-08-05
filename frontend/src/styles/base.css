@@ -1,0 +1,76 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 4% 32%, rgba(255, 189, 63, 0.13) 0 120px, transparent 260px),
+    radial-gradient(circle at 96% 54%, rgba(46, 185, 154, 0.11) 0 150px, transparent 310px),
+    var(--bg);
+  color: var(--text);
+  font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: var(--font-size);
+  font-weight: 450;
+  line-height: 1.62;
+  letter-spacing: var(--tracking);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.app {
+  overflow-x: clip;
+}
+
+button,
+input,
+select {
+  letter-spacing: inherit;
+}
+
+button,
+select {
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3,
+p {
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.32;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 650;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.muted {
+  color: var(--text-faint);
+  font-size: 0.93em;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
