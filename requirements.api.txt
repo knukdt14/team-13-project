@@ -1,9 +1,7 @@
 # 백엔드(API) 컨테이너 전용 의존성.
 #
-# 임베딩 모델·FAISS·torch 는 AI 컨테이너에만 둔다. 여기에 섞으면 백엔드
+# 임베딩 모델·FAISS 는 AI 컨테이너에만 둔다. 여기에 섞으면 백엔드
 # 이미지가 200MB 에서 4GB 로 불어나고 빌드도 10 배 느려진다.
-#
-# 로컬에서 세 프로세스를 한 번에 띄우려면 기존 requirements.txt 를 쓰면 된다.
 
 fastapi
 uvicorn[standard]
@@ -13,3 +11,12 @@ pypdf
 
 # AI 컨테이너 호출용 HTTP 클라이언트(스트리밍 지원)
 httpx
+
+# 이미지 OCR — src/backend/services/document_service.py 가 쓴다.
+#
+# ⚠️ easyocr 은 torch 를 끌고 온다. 이 컨테이너를 가볍게 두려던 취지와
+#    어긋나므로, OCR 을 src/ai 로 옮기고 여기서는 빼는 것을 제안한다.
+#    옮기기 전까지는 없으면 첨부 이미지 업로드가 ImportError 로 죽는다.
+easyocr
+pillow
+numpy>=1.26.0

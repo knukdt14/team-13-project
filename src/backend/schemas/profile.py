@@ -25,8 +25,25 @@ class EmploymentStatus(str, Enum):
     OTHER = "기타"
 
 
+# 실제 정책 데이터에서 뽑은 범위다. 청년기본법은 19~34세지만 지자체 조례가
+# 더 넓게 잡는 경우가 많아 데이터가 훨씬 넓다.
+#
+#   나이 제한이 있는 정책 1,432건
+#   하한  19세(814) · 18세(458) · 15세(60) · 17세(12)
+#   상한  39세(890) · 45세(158) · 34세(136) · 49세(75)
+#
+# 상한을 45로 막으면 49세까지 받는 정책 75건이 잘린다.
+YOUTH_MIN_AGE = 15
+YOUTH_MAX_AGE = 49
+
+
 class UserProfile(BaseModel):
-    age: int | None = Field(default=None, ge=0, le=120)
+    age: int | None = Field(
+        default=None,
+        ge=YOUTH_MIN_AGE,
+        le=YOUTH_MAX_AGE,
+        description=f"청년 나이 ({YOUTH_MIN_AGE}~{YOUTH_MAX_AGE}세)",
+    )
     region: str | None = Field(default=None, description="시도 코드 또는 이름")
     employment: str | None = Field(default=None, description="jobCd 한글명")
     education: str | None = Field(default=None, description="schoolCd 한글명")
