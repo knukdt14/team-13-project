@@ -31,9 +31,16 @@ def read_pdf(data: bytes) -> tuple[str, int, str]:
 def read_image(data: bytes) -> tuple[str, str]:
     """EasyOCR 모델을 최초 이미지 요청에서 한 번만 준비한다."""
     global _ocr_reader
-    import easyocr
-    import numpy as np
-    from PIL import Image
+    try:
+        import easyocr
+        import numpy as np
+        from PIL import Image
+    except ImportError as error:
+        # 백엔드 이미지를 가볍게 유지하려고 OCR 의존성(torch 계열)은 넣지 않는다.
+        # 이미지 인식(F4·P3)을 켜려면 requirements.api.txt 에 easyocr 를 추가한다.
+        raise InvalidFileError(
+            "이미지 인식(OCR) 기능이 이 서버에 설치되어 있지 않아요. PDF로 올려주세요."
+        ) from error
 
     if _ocr_reader is None:
         for stream in (sys.stdout, sys.stderr):

@@ -1,0 +1,41 @@
+# AI 서비스 — FAISS 하이브리드 검색 + Solar 답변 생성
+#
+# 이 이미지만 무겁다(약 3~4GB). 임베딩 모델(BAAI/bge-m3, 약 2GB)은 이미지에
+# 넣지 않고 첫 기동 때 내려받아 /models 볼륨에 캐시한다. 이미지에 넣으면
+# 빌드가 훨씬 느려지고, 모델을 바꿀 때마다 재빌드해야 하기 때문이다.
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    HF_HOME=/models \
+    EMBEDDING_DEVICE=cpu \
+    EMBEDDING_USE_FP16=false
+
+# torch 를 CPU 전용 휠로 먼저 깔아 둔다. 이 줄이 없으면 sentence-transformers
+# 가 CUDA 빌드를 끌어와 이미지가 2GB 이상 커진다.
+COPY requirements.ai.txt ./
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
+ && pip install --no-cache-dir -r requirements.ai.txt
+
+# 소스는 의존성 뒤에 복사한다. 코드만 고쳤을 때 pip 레이어를 재사용하기 위해서다.
+COPY src/shared/ ./src/shared/
+COPY src/rag/ ./src/rag/
+COPY src/ai/ ./src/ai/
+
+# 검색기가 정책 원본을 읽는다(policies_structured.json). 나머지 대용량 원본은
+# 런타임에 필요 없으므로 넣지 않는다.
+COPY data/policies_structured.json ./data/
+
+EXPOSE 9000
+
+# 모델 적재 전에는 retriever_ready 가 false 라서 unhealthy 로 보인다.
+# start-period 를 길게 준 이유는 첫 실행에서 모델 2GB 를 받기 때문이다.
+HEALTHCHECK --interval=15s --timeout=10s --start-period=900s --retries=5 \
+    CMD python -c "import json,urllib.request,sys; \
+sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=5))['retriever_ready'] else 1)"
+
+CMD ["uvicorn", "src.ai.main:app", "--host", "0.0.0.0", "--port", "9000"]

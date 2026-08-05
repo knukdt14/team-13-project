@@ -1,0 +1,45 @@
+# 백엔드(API) 서비스 — FastAPI · SQLite · 정책 목록/지도
+#
+# 임베딩 모델도 FAISS 인덱스도 올리지 않으므로 가볍다(약 200MB). 검색과 답변
+# 생성이 필요할 때만 AI 서비스에 HTTP로 물어본다.
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    DB_PATH=/data/app.db \
+    AI_SERVICE_URL=http://ai:9000
+
+COPY requirements.api.txt ./
+RUN pip install --no-cache-dir -r requirements.api.txt
+
+COPY src/shared/ ./src/shared/
+COPY src/backend/ ./src/backend/
+
+# 정책 목록·지도·자격 진단은 모델 없이 순수 계산으로 돌아간다. 그 계산에
+# 필요한 팀 RAG 모듈만 골라 넣는다(faiss·torch 를 끌어오지 않는 파일들이다).
+COPY src/rag/__init__.py src/rag/eligibility.py ./src/rag/
+COPY src/rag/core/__init__.py \
+     src/rag/core/condition_extractor.py \
+     src/rag/core/policy_filter.py \
+     src/rag/core/data_loader.py \
+     ./src/rag/core/
+
+COPY data/policies_structured.json \
+     data/code_definitions.json \
+     data/provinces.geojson \
+     ./data/
+
+# SQLite 를 볼륨에 두어 컨테이너를 지워도 대화 이력이 남게 한다.
+RUN mkdir -p /data
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request,sys; \
+sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"
+
+CMD ["uvicorn", "src.backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
