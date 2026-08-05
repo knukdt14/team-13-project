@@ -29,8 +29,8 @@ src/
 ```text
 사용자 질문
   -> 조건 추출(age, region, employment, education, income_bracket)
-  -> 나이·지역·직업·학력·소득·접수기간 정확 필터
-  -> BGE-M3 GPU Dense 검색 + BM25 검색
+  -> structured에서 나이·지역·직업·학력·소득·접수기간 선필터링
+  -> 조건을 통과한 후보만 BGE-M3 Dense 검색 + BM25 검색
   -> Reciprocal Rank Fusion 하이브리드 순위
   -> policy_id 중복 제거 및 Top-K
   -> Solar API 스트리밍 답변 + 정책 출처
@@ -44,6 +44,10 @@ src/
 | 키워드 검색 | BM25 + 한국어 2-gram |
 | 기본 검색 | Dense 0.6 + BM25 0.4 RRF 하이브리드 |
 | 생성 LLM | Upstage `solar-pro3` API |
+
+검색 시 `policies_structured.json`에서 조건을 통과한 `policy_id`를 먼저 고른다.
+그 정책에 연결된 후보 벡터만 FAISS에서 비교하고 BM25도 같은 후보만 점수화한다.
+검색 결과를 만들 때 조건을 한 번 더 검증해 잘못된 정책이 반환되지 않게 한다.
 
 > README의 Chroma를 실험했으나 이 노트북의 Windows + Chroma 1.5.9에서 큰
 > Persistent HNSW 컬렉션이 재시작 후 열리지 않는 문제가 재현됐다. 실행 가능한
