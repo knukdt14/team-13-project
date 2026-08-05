@@ -83,11 +83,10 @@
 | 지도 | **Kakao Maps JS SDK** | 폴리곤 오버레이, hover 이벤트, 애니메이션 확대 지원 |
 | Backend | **FastAPI** + Uvicorn | 평가 항목 명시. Pydantic 기반 자동 OpenAPI 문서 |
 | 검증/계약 | **Pydantic** | 팀 간 인터페이스 계약을 코드로 고정 |
-| RAG | **LangChain** (LCEL) | 리트리버 조합·체인 구성 |
-| Vector DB | **Chroma** | 로컬 영속화, 메타데이터 필터링 지원 |
-| Embedding | `paraphrase-multilingual-MiniLM-L12-v2` | 한국어 지원, 경량 |
-| 하이브리드 검색 | **BM25 + Dense** (`EnsembleRetriever`) | 정책명·기관명 등 고유명사에 강함 |
-| LLM | `Qwen/Qwen2.5-0.5B-Instruct` | 수업 기준 모델. CPU 구동 가능 |
+| Vector DB | **FAISS** | `src/rag/storage/` 에 인덱스. 각자 빌드 |
+| Embedding | **BAAI/bge-m3** | 한국어 성능이 좋은 다국어 임베딩 |
+| 하이브리드 검색 | **BM25 + Dense** | 정책명·기관명 등 고유명사에 강함 |
+| LLM | **Upstage Solar** (`solar-pro3`) | API 호출. 로컬 모델을 올리지 않아 배포가 가볍다 |
 | RDB | **SQLite** | 대화 이력, 문서 메타, 사용자 프로필, 피드백 |
 | 배포 | **Docker** / Docker Hub / **Hugging Face Spaces** | Module 14 평가 항목 |
 | 협업 | **Git / GitHub** (Issue · Branch · PR) | Module 14 평가 항목 |
@@ -170,8 +169,11 @@ app.mount("/", StaticFiles(directory="dist", html=True), name="spa")
 |---|---|---|
 | 입력 | `data/policies_rag_docs.json` (2,693건) | 사용자가 올린 PDF / 이미지 |
 | 시점 | 사전 구축 (배포 전) | 런타임 |
-| 저장 | Chroma `policies` 컬렉션 (영속) | Chroma 임시 컬렉션 (세션 종료 시 정리) |
-| 담당 | 김영민 | 김영민 (파싱) + 박준혁 (검색 병합) |
+| 저장 | FAISS 인덱스 (`src/rag/storage/`) | SQLite + 프롬프트에 직접 첨부 |
+| 담당 | 김영민 (문서 생성) → 박준혁 (인덱싱) | 최성호 (저장) + 김영민 (파싱) |
+
+> 생성 모델은 **Upstage Solar API** 로 확정했다. 팀원이 각자 API 키를 발급받아
+> `src/rag/.env` 에 넣는다. 임베딩(BGE-M3)은 Hugging Face 모델이다.
 
 기본 지식베이스와 사용자 업로드 문서를 **분리**하는 것이 핵심이다. 섞으면 다른 사용자의 업로드가 내 답변에 새어 들어간다.
 

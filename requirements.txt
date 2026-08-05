@@ -5,3 +5,9 @@ transformers>=5.0,<6.0
 openai>=1.52.2
 python-dotenv>=1.0.1
 rank-bm25>=0.2.2
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-multipart
+pypdf
+easyocr

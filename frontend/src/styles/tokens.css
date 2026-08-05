@@ -1,0 +1,48 @@
+/* 청년정책도우미 — 따뜻하고 생동감 있는 정책 큐레이터 */
+
+:root {
+  --bg: #fffaf6;
+  --surface: #ffffff;
+  --surface-soft: #f8f5f7;
+  --surface-hover: #f1edf1;
+
+  --primary: #ff5d50;
+  --primary-dark: #e9473c;
+  --primary-wash: #fff0ed;
+  --on-primary: #ffffff;
+
+  --accent: #7157e8;
+  --accent-dark: #5840ca;
+  --accent-wash: #f0edff;
+  --mint: #2eb99a;
+  --mint-wash: #eafaf6;
+  --sun: #ffbd3f;
+  --sun-wash: #fff7df;
+
+  --text: #292131;
+  --text-soft: #6d6374;
+  --text-faint: #9b919f;
+  --line: #eee6eb;
+  --line-strong: #dcd1d9;
+
+  --radius: 26px;
+  --radius-sm: 16px;
+  --radius-pill: 999px;
+  --bubble-radius: 24px;
+
+  --shadow: 0 18px 55px rgba(73, 49, 70, 0.09), 0 3px 12px rgba(73, 49, 70, 0.04);
+  --shadow-sm: 0 8px 28px rgba(73, 49, 70, 0.07);
+  --card-border: 1px solid rgba(87, 61, 82, 0.1);
+
+  --font-size: 16px;
+  --tracking: -0.018em;
+  --pad-card: 26px;
+
+  /* 분야별 색은 정책을 훑어보기 위한 기능적 표시다. */
+  --tone-job: #4269e1;
+  --tone-home: #18a98b;
+  --tone-edu: #0784a3;
+  --tone-life: #eb8b21;
+  --tone-part: #e34f84;
+  --tone-etc: #7d7480;
+}
