@@ -8,6 +8,12 @@ from typing import Any, Mapping
 
 from .condition_extractor import REGION_ALIASES, REGION_PREFIXES
 
+# 이 서비스가 다루는 "청년" 나이 범위. 정책 자체에 나이 제한이 없어도,
+# 사용자가 입력한 나이가 이 범위 밖이면(예: 13세) 청년정책 서비스 대상이
+# 아니므로 매칭에서 제외한다.
+YOUTH_MIN_AGE = 19
+YOUTH_MAX_AGE = 39
+
 
 def _as_int(value: Any) -> int | None:
     try:
@@ -64,19 +70,20 @@ class PolicyFilter:
             return True
 
         # 온통청년 데이터에서는 N이 연령 제한 있음, Y가 제한 없음을 뜻한다.
-        # N인데 범위가 0 또는 결측인 레코드는 자격을 판정할 수 없으므로
-        # 오탐 탈락시키지 않고 후보로 유지한다.
+        # N이어도 최소·최대 나이가 0 또는 결측이면 실질적으로 "그쪽 경계는
+        # 명시 안 됨"이다. 이 서비스는 청년정책 챗봇이므로, 명시 안 된 경계는
+        # 0이나 무한대가 아니라 이 서비스가 다루는 청년 범위
+        # (YOUTH_MIN_AGE~YOUTH_MAX_AGE)로 채운다.
         if policy.get("sprtTrgtAgeLmtYn") != "N":
-            return True
+            return YOUTH_MIN_AGE <= age <= YOUTH_MAX_AGE
+
         min_age = _as_int(policy.get("sprtTrgtMinAge"))
         max_age = _as_int(policy.get("sprtTrgtMaxAge"))
         has_minimum = min_age is not None and min_age > 0
         has_maximum = max_age is not None and max_age > 0
-        if not has_minimum and not has_maximum:
-            return True
-        return (not has_minimum or age >= min_age) and (
-            not has_maximum or age <= max_age
-        )
+        effective_min = min_age if has_minimum else YOUTH_MIN_AGE
+        effective_max = max_age if has_maximum else YOUTH_MAX_AGE
+        return effective_min <= age <= effective_max
 
     @staticmethod
     def _matches_region(policy: Mapping[str, Any], region: Any) -> bool:

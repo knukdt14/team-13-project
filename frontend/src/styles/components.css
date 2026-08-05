@@ -772,8 +772,70 @@
   border-radius: var(--bubble-radius) var(--bubble-radius) var(--bubble-radius) 7px;
   background: #fff;
   line-height: 1.8;
-  white-space: pre-wrap;
   box-shadow: var(--shadow-sm);
+}
+
+.answer-text > *:first-child { margin-top: 0; }
+.answer-text > *:last-child { margin-bottom: 0; }
+
+.answer-text p { margin: 0 0 12px; }
+
+.answer-text h1,
+.answer-text h2,
+.answer-text h3,
+.answer-text h4 {
+  margin: 18px 0 8px;
+  color: var(--text);
+  font-weight: 750;
+  line-height: 1.4;
+}
+.answer-text h1 { font-size: 19px; }
+.answer-text h2 { font-size: 17px; }
+.answer-text h3 { font-size: 16px; }
+.answer-text h4 { font-size: 15px; }
+
+.answer-text strong { font-weight: 750; color: var(--text); }
+
+.answer-text ul,
+.answer-text ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+.answer-text li { margin: 0 0 6px; }
+
+.answer-text a { color: var(--accent); text-decoration: underline; }
+
+.answer-text code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--accent-wash);
+  font-size: 0.9em;
+}
+
+.answer-text blockquote {
+  margin: 0 0 12px;
+  padding: 4px 14px;
+  border-left: 3px solid var(--line);
+  color: var(--text-soft);
+}
+
+.answer-text hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.answer-text table {
+  width: 100%;
+  margin: 0 0 12px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.answer-text th,
+.answer-text td {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  text-align: left;
 }
 
 /* 조건 입력 오류 안내 (청년 범위 밖 나이 등) */

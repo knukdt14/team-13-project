@@ -35,14 +35,23 @@ class PolicyFilterTest(unittest.TestCase):
         self.policy["sprtTrgtMaxAge"] = "39"
         self.assertFalse(self.filter.matches(self.policy, {"age": 25}))
 
-    def test_y_means_age_is_not_limited(self):
+    def test_y_means_age_is_not_limited_within_youth_range(self):
         self.policy["sprtTrgtAgeLmtYn"] = "Y"
-        self.assertTrue(self.filter.matches(self.policy, {"age": 40}))
+        self.assertTrue(self.filter.matches(self.policy, {"age": 35}))
 
-    def test_zero_range_does_not_reject_when_age_is_unknown(self):
+    def test_y_still_excludes_age_outside_youth_range(self):
+        self.policy["sprtTrgtAgeLmtYn"] = "Y"
+        self.assertFalse(self.filter.matches(self.policy, {"age": 13}))
+
+    def test_zero_range_does_not_reject_when_age_is_unknown_within_youth_range(self):
         self.policy["sprtTrgtMinAge"] = "0"
         self.policy["sprtTrgtMaxAge"] = "0"
-        self.assertTrue(self.filter.matches(self.policy, {"age": 40}))
+        self.assertTrue(self.filter.matches(self.policy, {"age": 35}))
+
+    def test_zero_range_still_excludes_age_outside_youth_range(self):
+        self.policy["sprtTrgtMinAge"] = "0"
+        self.policy["sprtTrgtMaxAge"] = "0"
+        self.assertFalse(self.filter.matches(self.policy, {"age": 13}))
 
     def test_rejects_other_region(self):
         self.assertFalse(self.filter.matches(self.policy, {"region": "서울"}))
