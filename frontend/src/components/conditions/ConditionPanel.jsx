@@ -1,3 +1,5 @@
+import { YOUTH_MAX_AGE, YOUTH_MIN_AGE } from '../../hooks/useConditions'
+
 export default function ConditionPanel({ meta, conditions, onChange, onReset }) {
   const dirty = Object.values(conditions).some(Boolean)
   return <aside className="conditions"><div className="box">
@@ -18,10 +20,7 @@ function Row({ label, children }) { return <div className="row"><span className=
 
 // 청년정책 서비스라 청년 범위 밖 나이는 받지 않는다. number input 의 min/max 는
 // 스피너만 제한하고 직접 타이핑은 막지 못해서, 값이 벗어나면 조건에서 빼고
-// 왜 뺐는지 알려준다. 백엔드 UserProfile 도 같은 범위로 검증한다.
-const YOUTH_MIN_AGE = 15
-const YOUTH_MAX_AGE = 49
-
+// 왜 뺐는지 알려준다. 범위는 useConditions 에서 가져온다.
 function AgeField({ value, onChange }) {
   const typed = String(value ?? '').trim()
   const number = Number(typed)

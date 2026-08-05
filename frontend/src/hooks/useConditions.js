@@ -6,8 +6,10 @@ export const EMPTY_CONDITIONS = {
   include_closed: false, include_nationwide: false,
 }
 
-// 실제 정책 데이터에서 뽑은 범위. 하한은 15세(60건), 상한은 49세(75건)까지 쓴다.
-// 백엔드 UserProfile 도 같은 값으로 검증한다. (src/backend/schemas/profile.py)
+// ⚠️ src/shared/constants.py 의 YOUTH_MIN_AGE / YOUTH_MAX_AGE 와 같은 값이어야 한다.
+// 자바스크립트가 파이썬을 읽을 수 없어 여기만 손으로 맞춘다.
+// 범위를 바꿀 일이 있으면 파이썬 쪽을 먼저 고치고 이 두 줄을 따라 고친다.
+// 근거(데이터 분포)도 그 파일에 적어 두었다.
 export const YOUTH_MIN_AGE = 15
 export const YOUTH_MAX_AGE = 49
 

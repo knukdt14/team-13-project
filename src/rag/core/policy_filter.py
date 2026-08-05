@@ -6,13 +6,16 @@ from datetime import date
 import re
 from typing import Any, Mapping
 
+from src.shared.constants import YOUTH_MAX_AGE, YOUTH_MIN_AGE
+
 from .condition_extractor import REGION_ALIASES, REGION_PREFIXES
 
 # 이 서비스가 다루는 "청년" 나이 범위. 정책 자체에 나이 제한이 없어도,
 # 사용자가 입력한 나이가 이 범위 밖이면(예: 13세) 청년정책 서비스 대상이
 # 아니므로 매칭에서 제외한다.
-YOUTH_MIN_AGE = 19
-YOUTH_MAX_AGE = 39
+#
+# 값은 src/shared/constants.py 에 한 번만 둔다. 백엔드 UserProfile 도 같은
+# 값으로 입력을 거르므로 두 곳이 어긋나면 "입력은 받는데 결과는 0건"이 된다.
 
 
 def _as_int(value: Any) -> int | None:
