@@ -24,17 +24,27 @@ while True:
         "pageSize": 100,
         "rtnType": "json"
     }
-    for attempt in range(3):
-        res = requests.get(BASE_URL, params=params)
+    # 온통청년 API는 간헐적으로 JSON 대신 오류 HTML을 돌려준다. 파싱에 성공해도
+    # result 키가 빠진 응답이 오기도 한다. 둘 다 재시도 대상으로 본다.
+    # (전에는 파싱 실패만 재시도해서 1,500건쯤에서 KeyError로 죽었다.)
+    data = None
+    for attempt in range(5):
         try:
-            data = res.json()
-            break
-        except requests.exceptions.JSONDecodeError:
-            print(f"{page}페이지 응답 파싱 실패 (status={res.status_code}), 재시도 {attempt + 1}/3")
-            print(res.text[:300])
-            time.sleep(1.5)
+            res = requests.get(BASE_URL, params=params, timeout=30)
+            payload = res.json()
+        except (requests.exceptions.RequestException, ValueError) as exc:
+            reason = f"응답 파싱 실패 ({exc.__class__.__name__})"
+        else:
+            if isinstance(payload.get("result"), dict):
+                data = payload
+                break
+            reason = f"result 키 없음 (keys={list(payload)[:5]})"
+
+        wait = 1.5 * (attempt + 1)          # 서버가 흔들릴 때 몰아치지 않도록
+        print(f"{page}페이지 {reason}, {wait:.1f}초 후 재시도 {attempt + 1}/5")
+        time.sleep(wait)
     else:
-        raise RuntimeError(f"{page}페이지 3회 재시도 실패")
+        raise RuntimeError(f"{page}페이지 5회 재시도 실패. 누적 {len(all_policies)}건에서 중단")
 
     items = data["result"]["youthPolicyList"]
     total_count = data["result"]["pagging"]["totCount"]
