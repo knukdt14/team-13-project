@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
 from src.backend.db.repository import Repository
-from src.backend.deps import get_generator, get_repository, get_retriever
+from src.backend.deps import get_ai_client, get_repository
 from src.backend.schemas import AskRequest, AskResponse, EligibilityResponse, SearchMode, UserProfile
+from src.backend.services.ai_client import AIClient
 from src.backend.services.chat_service import ChatService
 
 router = APIRouter(tags=["chat"])
@@ -21,10 +21,9 @@ router = APIRouter(tags=["chat"])
 def ask(
     body: AskRequest,
     repository: Repository = Depends(get_repository),
-    retriever: Any = Depends(get_retriever),
-    generator: Any | None = Depends(get_generator),
+    ai: AIClient = Depends(get_ai_client),
 ) -> AskResponse:
-    return ChatService(repository, retriever, generator).ask(body)
+    return ChatService(repository, ai).ask(body)
 
 
 @router.get(
@@ -45,8 +44,7 @@ def ask_stream(
     include_closed: bool = False,
     include_nationwide: bool = False,
     repository: Repository = Depends(get_repository),
-    retriever: Any = Depends(get_retriever),
-    generator: Any | None = Depends(get_generator),
+    ai: AIClient = Depends(get_ai_client),
 ) -> StreamingResponse:
     request = AskRequest(
         question=question, session_id=session_id,
@@ -60,7 +58,7 @@ def ask_stream(
 
     started = time.perf_counter()
     tokens, result, actual_session_id, used_attachments, generated = ChatService(
-        repository, retriever, generator
+        repository, ai
     ).stream(request)
 
     def events():
@@ -85,6 +83,6 @@ def ask_stream(
 def eligibility(
     profile: UserProfile,
     repository: Repository = Depends(get_repository),
-    retriever: Any = Depends(get_retriever),
 ) -> EligibilityResponse:
-    return ChatService(repository, retriever, None).eligibility(profile)
+    """자격 판정은 순수 계산이라 AI 컨테이너 없이도 동작한다."""
+    return ChatService(repository).eligibility(profile)

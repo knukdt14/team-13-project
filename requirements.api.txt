@@ -1,0 +1,15 @@
+# 백엔드(API) 컨테이너 전용 의존성.
+#
+# 임베딩 모델·FAISS·torch 는 AI 컨테이너에만 둔다. 여기에 섞으면 백엔드
+# 이미지가 200MB 에서 4GB 로 불어나고 빌드도 10 배 느려진다.
+#
+# 로컬에서 세 프로세스를 한 번에 띄우려면 기존 requirements.txt 를 쓰면 된다.
+
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-multipart
+pypdf
+
+# AI 컨테이너 호출용 HTTP 클라이언트(스트리밍 지원)
+httpx

@@ -1,0 +1,16 @@
+# AI 서비스 컨테이너 전용 의존성.
+#
+# torch 는 Dockerfile.ai 에서 CPU 전용 휠로 따로 설치한다. 기본 인덱스로
+# 설치하면 CUDA 런타임까지 딸려와 이미지가 2GB 이상 커진다.
+
+faiss-cpu>=1.8.0
+numpy>=1.26.0
+sentence-transformers>=3.0.0
+transformers>=5.0,<6.0
+openai>=1.52.2
+python-dotenv>=1.0.1
+rank-bm25>=0.2.2
+
+# HTTP 창구
+fastapi
+uvicorn[standard]

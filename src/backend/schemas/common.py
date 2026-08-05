@@ -25,6 +25,9 @@ class HealthResponse(BaseModel):
     rag_mode: str = "unavailable"
     retriever_ready: bool = False
     generator_ready: bool = False
+    # 컨테이너 분리 후, AI가 별도 서비스이므로 어디에 붙었고 왜 실패했는지 노출한다.
+    ai_service_url: str = ""
+    ai_error: str | None = None
 
 
 class Page(BaseModel, Generic[T]):
