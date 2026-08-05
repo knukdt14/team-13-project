@@ -15,13 +15,13 @@ import torch
 from sentence_transformers import SentenceTransformer
 
 try:
-    from ..core.config import DEFAULT_SETTINGS
+    from ..core.config import DEFAULT_SETTINGS, PROJECT_DIR
     from ..core.data_loader import load_documents
     from ..core.device import describe_device, resolve_device
 except ImportError:  # python src/rag/cli/build_index.py 직접 실행도 지원
     project_dir = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(project_dir))
-    from src.rag.core.config import DEFAULT_SETTINGS
+    from src.rag.core.config import DEFAULT_SETTINGS, PROJECT_DIR
     from src.rag.core.data_loader import load_documents
     from src.rag.core.device import describe_device, resolve_device
 
@@ -96,7 +96,7 @@ def build_index(
 
     manifest: dict[str, object] = {
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "documents_path": str(documents_path.resolve()),
+        "documents_path": _manifest_path(documents_path),
         "document_count": len(documents),
         "model_name": model_name,
         "embedding_dimension": int(embeddings.shape[1]),
@@ -112,6 +112,15 @@ def build_index(
         json.dump(manifest, file, ensure_ascii=False, indent=2)
     print(f"인덱스 저장 완료: {storage_dir}")
     return manifest
+
+
+def _manifest_path(path: Path) -> str:
+    """프로젝트 내부 데이터 경로는 PC와 무관한 상대경로로 기록한다."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(PROJECT_DIR.resolve()).as_posix()
+    except ValueError:
+        return path.name
 
 
 def main() -> None:
