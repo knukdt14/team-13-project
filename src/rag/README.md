@@ -6,6 +6,9 @@
 - `../data/policies_rag_docs.json`: 검색 문서 2,693건
 - `../data/policies_structured.json`: 조건 필터와 응답 메타데이터
 
+연령 제한 플래그는 온통청년 데이터 기준으로 `N=제한 있음`, `Y=제한 없음`으로
+판정한다. 나이 범위가 0 또는 결측이면 오탐 방지를 위해 후보에서 제외하지 않는다.
+
 ## 폴더 구조
 
 ```text
@@ -134,6 +137,11 @@ src\rag\.venv-gpu\Scripts\python.exe -m src.rag.cli.build_index --device cuda --
 - 생성 장치: RTX 4070 GPU
 - 모델 dtype: FP16
 - 유사도: cosine
+- 지역 메타데이터: `region_codes`(시도 코드), `is_nationwide`(전국 여부)
+
+지역 메타데이터는 `policies_structured.json`의 `zipCdList`를 `policy_id`로 연결해
+생성한다. 중복을 제거한 세부 지역코드가 200개 이상인 정책은
+`is_nationwide=true`로 기록된다.
 
 ## 검색 모드 비교
 

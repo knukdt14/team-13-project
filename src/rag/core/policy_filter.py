@@ -57,14 +57,26 @@ class PolicyFilter:
 
     @staticmethod
     def _matches_age(policy: Mapping[str, Any], age: Any) -> bool:
-        if age is None or policy.get("sprtTrgtAgeLmtYn") != "Y":
+        if age is None:
             return True
         age = _as_int(age)
         if age is None:
             return True
+
+        # 온통청년 데이터에서는 N이 연령 제한 있음, Y가 제한 없음을 뜻한다.
+        # N인데 범위가 0 또는 결측인 레코드는 자격을 판정할 수 없으므로
+        # 오탐 탈락시키지 않고 후보로 유지한다.
+        if policy.get("sprtTrgtAgeLmtYn") != "N":
+            return True
         min_age = _as_int(policy.get("sprtTrgtMinAge"))
         max_age = _as_int(policy.get("sprtTrgtMaxAge"))
-        return (min_age is None or age >= min_age) and (max_age is None or age <= max_age)
+        has_minimum = min_age is not None and min_age > 0
+        has_maximum = max_age is not None and max_age > 0
+        if not has_minimum and not has_maximum:
+            return True
+        return (not has_minimum or age >= min_age) and (
+            not has_maximum or age <= max_age
+        )
 
     @staticmethod
     def _matches_region(policy: Mapping[str, Any], region: Any) -> bool:
