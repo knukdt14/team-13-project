@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-08-04T20:10:13+09:00",
+  "documents_path": "data/policies_rag_docs.json",
+  "document_count": 2693,
+  "model_name": "BAAI/bge-m3",
+  "embedding_dimension": 1024,
+  "max_seq_length": 1024,
+  "build_device": "cuda (NVIDIA GeForce RTX 4070 Laptop GPU)",
+  "dtype": "float16",
+  "similarity": "cosine",
+  "normalized": true,
+  "vector_db": "faiss",
+  "chroma_collection": null
+}
