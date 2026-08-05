@@ -19,15 +19,19 @@ def _bootstrap_direct_execution() -> None:
     gpu_python = rag_dir / ".venv-gpu" / "Scripts" / "python.exe"
 
     if gpu_python.exists() and Path(sys.executable).resolve() != gpu_python.resolve():
-        completed = subprocess.run(
-            [
-                str(gpu_python),
-                "-m",
-                "src.rag.cli.terminal_chatbot",
-                *sys.argv[1:],
-            ],
-            cwd=project_dir,
-        )
+        try:
+            completed = subprocess.run(
+                [
+                    str(gpu_python),
+                    "-m",
+                    "src.rag.cli.terminal_chatbot",
+                    *sys.argv[1:],
+                ],
+                cwd=project_dir,
+            )
+        except KeyboardInterrupt:
+            # 자식 프로세스 종료 뒤 부모 프로세스에 전달된 Ctrl+C의 traceback을 숨긴다.
+            raise SystemExit(130) from None
         raise SystemExit(completed.returncode)
 
     project_path = str(project_dir)
@@ -41,11 +45,11 @@ from openai import OpenAIError
 
 if __package__:
     from ..generator import SolarGenerator
-    from ..prompts import FOLLOW_UP_HINTS
+    from ..prompts import FOLLOW_UP_HINTS, is_greeting, is_personalized_request
     from ..retriever import PolicyRetriever
 else:
     from src.rag.generator import SolarGenerator
-    from src.rag.prompts import FOLLOW_UP_HINTS
+    from src.rag.prompts import FOLLOW_UP_HINTS, is_greeting, is_personalized_request
     from src.rag.retriever import PolicyRetriever
 
 
@@ -65,6 +69,24 @@ class TerminalPolicyChatbot:
         self.previous_question: str | None = None
 
     def chat(self, question: str) -> None:
+        if is_greeting(question):
+            answer = "안녕하세요. 궁금한 청년정책이나 현재 조건을 말씀해 주세요."
+            print(f"\nSolar: {answer}\n")
+            self._remember(question, answer)
+            return
+
+        explicit_conditions, _ = self.retriever.extractor.extract(question)
+        if is_personalized_request(question) and not explicit_conditions.to_dict():
+            answer = (
+                "맞춤 정책을 찾으려면 나이, 거주지역, 취업상태, 학력을 알려주세요. "
+                "웹에서는 '내 조건'에 입력한 정보가 자동으로 검색에 반영됩니다."
+            )
+            print("\n[검색 조건] 추출된 조건 없음")
+            print("[검색 결과] 0건")
+            print(f"\nSolar: {answer}\n")
+            self._remember(question, answer)
+            return
+
         retrieval_question = self._make_retrieval_question(question)
         result = self.retriever.search(
             retrieval_question,
@@ -105,12 +127,7 @@ class TerminalPolicyChatbot:
         answer = "".join(answer_parts)
         print("\n")
         self._print_sources(policies)
-        self.history.extend(
-            [
-                {"role": "user", "content": question},
-                {"role": "assistant", "content": answer},
-            ]
-        )
+        self._remember(question, answer)
         self.previous_question = question
 
     def _make_retrieval_question(self, question: str) -> str:
@@ -130,10 +147,16 @@ class TerminalPolicyChatbot:
     def _print_sources(policies: list[dict[str, Any]]) -> None:
         print("[참고 정책]")
         for number, policy in enumerate(policies, start=1):
-            metadata = policy["metadata"]
-            url = metadata.get("application_url") or metadata.get("reference_url") or "URL 없음"
-            print(f"  [정책 {number}] {policy['policy_name']} - {url}")
+            print(f"  [정책 {number}] {policy['policy_name']}")
         print()
+
+    def _remember(self, question: str, answer: str) -> None:
+        self.history.extend(
+            [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": answer},
+            ]
+        )
 
     def reset(self) -> None:
         self.history.clear()

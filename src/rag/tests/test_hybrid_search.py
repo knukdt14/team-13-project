@@ -14,6 +14,14 @@ class HybridSearchTest(unittest.TestCase):
         indices, _ = search.rank("월세 주거 지원")
         self.assertEqual(int(indices[0]), 0)
 
+    def test_bm25_ranks_only_prefiltered_candidates(self):
+        search = BM25Search(
+            ["청년 월세 주거비 지원", "청년 취업 면접 지원", "청년 주거 상담"]
+        )
+        indices, _ = search.rank("월세 주거 지원", candidate_indices=[1, 2])
+        self.assertEqual(set(indices.tolist()), {1, 2})
+        self.assertNotIn(0, indices.tolist())
+
     def test_rrf_combines_two_rankings(self):
         ranked = reciprocal_rank_fusion([0, 1, 2], [1, 0, 2])
         self.assertIn(ranked[0][0], {0, 1})

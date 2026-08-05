@@ -29,6 +29,20 @@ class ConditionExtractorTest(unittest.TestCase):
         self.assertEqual(conditions.region, "부산")
         self.assertEqual(conditions.education, "대학 재학")
 
+    def test_extracts_colloquial_unemployed_and_startup(self):
+        conditions, _ = self.extractor.extract(
+            "대구, 만 29세, 백수야. 창업하고 싶은데 관련 정책이 있어?"
+        )
+        self.assertEqual(conditions.age, 29)
+        self.assertEqual(conditions.region, "대구")
+        self.assertEqual(conditions.employment, "미취업자")
+        self.assertEqual(conditions.category, "일자리")
+
+    def test_extracts_part_time_worker(self):
+        conditions, _ = self.extractor.extract("경기도 광주에 사는 29살 알바생이야")
+        self.assertEqual(conditions.region, "경기")
+        self.assertEqual(conditions.employment, "단기근로자")
+
 
 if __name__ == "__main__":
     unittest.main()

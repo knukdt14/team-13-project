@@ -27,10 +27,27 @@ class BM25Search:
         self.corpus = [tokenize(text) for text in texts]
         self.index = BM25Okapi(self.corpus)
 
-    def rank(self, query: str) -> tuple[np.ndarray, np.ndarray]:
-        scores = np.asarray(self.index.get_scores(tokenize(query)), dtype=np.float32)
-        indices = np.argsort(-scores)
-        return indices, scores[indices]
+    def rank(
+        self,
+        query: str,
+        candidate_indices: Sequence[int] | None = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """전체 문서 또는 structured 필터를 통과한 후보만 순위화한다."""
+        query_tokens = tokenize(query)
+        if candidate_indices is None:
+            scores = np.asarray(self.index.get_scores(query_tokens), dtype=np.float32)
+            indices = np.argsort(-scores, kind="stable")
+            return indices.astype(np.int64), scores[indices]
+
+        candidates = np.asarray(candidate_indices, dtype=np.int64)
+        if candidates.size == 0:
+            return candidates, np.asarray([], dtype=np.float32)
+        scores = np.asarray(
+            self.index.get_batch_scores(query_tokens, candidates.tolist()),
+            dtype=np.float32,
+        )
+        order = np.argsort(-scores, kind="stable")
+        return candidates[order], scores[order]
 
 
 def reciprocal_rank_fusion(

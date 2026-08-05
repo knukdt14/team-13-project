@@ -40,6 +40,15 @@ class PolicyRetriever:
         self.index = faiss.deserialize_index(serialized_index)
         if self.index.ntotal != len(self.documents):
             raise RuntimeError("FAISS 인덱스와 청크 메타데이터 개수가 다릅니다. 인덱스를 다시 생성하세요.")
+        try:
+            self.document_embeddings = self.index.reconstruct_n(
+                0, int(self.index.ntotal)
+            ).astype(np.float32, copy=False)
+        except RuntimeError as error:
+            raise RuntimeError(
+                "structured 선필터링 검색에는 벡터 복원이 가능한 FAISS 인덱스가 "
+                "필요합니다. IndexFlatIP로 인덱스를 다시 생성하세요."
+            ) from error
         self.device = resolve_device(settings.device)
         self.model = SentenceTransformer(
             str(self.manifest["model_name"]), device=self.device
@@ -81,17 +90,24 @@ class PolicyRetriever:
                 supplied["education"] = supplied.pop("school_status")
             conditions.update(supplied)
 
-        query_vector = self.model.encode(
-            [search_text], convert_to_numpy=True, normalize_embeddings=True
-        ).astype(np.float32)
-        policies = self._ranked_search(
-            query_vector,
-            search_text,
-            conditions,
-            top_k,
-            include_closed,
-            mode,
+        candidate_indices = self._prefilter_document_indices(
+            conditions, include_closed
         )
+        if candidate_indices.size == 0:
+            policies: list[dict[str, Any]] = []
+        else:
+            query_vector = self.model.encode(
+                [search_text], convert_to_numpy=True, normalize_embeddings=True
+            ).astype(np.float32)
+            policies = self._ranked_search(
+                query_vector,
+                search_text,
+                candidate_indices,
+                conditions,
+                top_k,
+                include_closed,
+                mode,
+            )
         return {
             "question": question,
             "search_text": search_text,
@@ -102,17 +118,42 @@ class PolicyRetriever:
             "policies": policies,
         }
 
+    def _prefilter_document_indices(
+        self,
+        conditions: Mapping[str, Any],
+        include_closed: bool,
+    ) -> np.ndarray:
+        """structured 조건을 먼저 적용하고 검색할 문서 인덱스만 반환한다."""
+        eligible_policy_ids = {
+            policy_id
+            for policy_id, policy in self.policies.items()
+            if self.policy_filter.matches(policy, conditions, include_closed)
+        }
+        return np.asarray(
+            [
+                index
+                for index, document in enumerate(self.documents)
+                if str(document["policy_id"]) in eligible_policy_ids
+            ],
+            dtype=np.int64,
+        )
+
     def _ranked_search(
         self,
         query_vector: np.ndarray,
         search_text: str,
+        candidate_indices: np.ndarray,
         conditions: Mapping[str, Any],
         top_k: int,
         include_closed: bool,
         mode: str,
     ) -> list[dict[str, Any]]:
-        dense_indices, dense_values = self._dense_ranking(query_vector)
-        bm25_indices, bm25_values = self.bm25.rank(search_text)
+        dense_indices, dense_values = self._dense_ranking(
+            query_vector, candidate_indices
+        )
+        bm25_indices, bm25_values = self.bm25.rank(
+            search_text, candidate_indices
+        )
         dense_score_by_index = {
             int(index): float(score) for index, score in zip(dense_indices, dense_values)
         }
@@ -158,53 +199,28 @@ class PolicyRetriever:
                 break
         return results
 
-    def _dense_ranking(self, query_vector: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        scores, indices = self.index.search(query_vector, len(self.documents))
-        return indices[0].astype(np.int64), scores[0].astype(np.float32)
-
-    def _search_unique_policies(
+    def _dense_ranking(
         self,
         query_vector: np.ndarray,
-        conditions: Mapping[str, Any],
-        top_k: int,
-        include_closed: bool,
-    ) -> list[dict[str, Any]]:
-        total = int(self.index.ntotal)
-        search_k = min(total, max(self.settings.candidate_k, top_k * 10))
-        while True:
-            scores, indices = self.index.search(query_vector, search_k)
-            results = self._collect_results(
-                scores[0], indices[0], conditions, top_k, include_closed
-            )
-            if len(results) >= top_k or search_k >= total:
-                return results
-            search_k = min(total, search_k * 2)
-
-    def _collect_results(
-        self,
-        scores: np.ndarray,
-        indices: np.ndarray,
-        conditions: Mapping[str, Any],
-        top_k: int,
-        include_closed: bool,
-    ) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
-        seen_policy_ids: set[str] = set()
-        for score, index in zip(scores, indices):
-            if int(index) < 0:
-                continue
-            chunk = self.documents[int(index)]
-            policy_id = str(chunk["policy_id"])
-            if policy_id in seen_policy_ids:
-                continue
-            policy = self.policies.get(policy_id)
-            if not policy or not self.policy_filter.matches(policy, conditions, include_closed):
-                continue
-            seen_policy_ids.add(policy_id)
-            results.append(self._format_result(policy, chunk, float(score)))
-            if len(results) >= top_k:
-                break
-        return results
+        candidate_indices: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """structured 후보 벡터만 임시 FAISS 인덱스에서 비교한다."""
+        candidates = np.asarray(candidate_indices, dtype=np.int64)
+        if candidates.size == 0:
+            return candidates, np.asarray([], dtype=np.float32)
+        candidate_index = faiss.IndexFlatIP(int(self.index.d))
+        candidate_index.add(
+            np.ascontiguousarray(self.document_embeddings[candidates], dtype=np.float32)
+        )
+        scores, local_indices = candidate_index.search(
+            np.ascontiguousarray(query_vector, dtype=np.float32),
+            int(candidates.size),
+        )
+        valid = local_indices[0] >= 0
+        return (
+            candidates[local_indices[0][valid]].astype(np.int64),
+            scores[0][valid].astype(np.float32),
+        )
 
     def _format_result(
         self,
