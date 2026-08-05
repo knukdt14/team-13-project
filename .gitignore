@@ -220,3 +220,4 @@ __marimo__/
 # 우편번호 원본 DB (용량 큼, zip_code_map.json 결과물만 커밋)
 data/zipcode_db/
 data/zipcode_DB.zip
+"app.db" 
