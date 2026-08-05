@@ -8,7 +8,7 @@ class PolicyFilterTest(unittest.TestCase):
     def setUp(self):
         self.filter = PolicyFilter(today=date(2026, 8, 4))
         self.policy = {
-            "sprtTrgtAgeLmtYn": "Y",
+            "sprtTrgtAgeLmtYn": "N",
             "sprtTrgtMinAge": "19",
             "sprtTrgtMaxAge": "34",
             "zipCdList": ["27110"],
@@ -29,6 +29,20 @@ class PolicyFilterTest(unittest.TestCase):
 
     def test_rejects_age_outside_range(self):
         self.assertFalse(self.filter.matches(self.policy, {"age": 40}))
+
+    def test_rejects_age_below_minimum_regression(self):
+        self.policy["sprtTrgtMinAge"] = "29"
+        self.policy["sprtTrgtMaxAge"] = "39"
+        self.assertFalse(self.filter.matches(self.policy, {"age": 25}))
+
+    def test_y_means_age_is_not_limited(self):
+        self.policy["sprtTrgtAgeLmtYn"] = "Y"
+        self.assertTrue(self.filter.matches(self.policy, {"age": 40}))
+
+    def test_zero_range_does_not_reject_when_age_is_unknown(self):
+        self.policy["sprtTrgtMinAge"] = "0"
+        self.policy["sprtTrgtMaxAge"] = "0"
+        self.assertTrue(self.filter.matches(self.policy, {"age": 40}))
 
     def test_rejects_other_region(self):
         self.assertFalse(self.filter.matches(self.policy, {"region": "서울"}))
