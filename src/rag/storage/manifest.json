@@ -1,6 +1,7 @@
 {
-  "created_at": "2026-08-04T20:10:13+09:00",
+  "created_at": "2026-08-05T14:38:49+09:00",
   "documents_path": "data/policies_rag_docs.json",
+  "policies_path": "data/policies_structured.json",
   "document_count": 2693,
   "model_name": "BAAI/bge-m3",
   "embedding_dimension": 1024,
@@ -10,5 +11,13 @@
   "similarity": "cosine",
   "normalized": true,
   "vector_db": "faiss",
-  "chroma_collection": null
+  "chroma_collection": null,
+  "metadata_fields": [
+    "chunk_id",
+    "policy_id",
+    "section",
+    "region_codes",
+    "is_nationwide"
+  ],
+  "nationwide_min_zip_code_count": 200
 }

@@ -8,6 +8,7 @@ import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Mapping
 
 import faiss
 import numpy as np
@@ -16,14 +17,62 @@ from sentence_transformers import SentenceTransformer
 
 try:
     from ..core.config import DEFAULT_SETTINGS, PROJECT_DIR
-    from ..core.data_loader import load_documents
+    from ..core.data_loader import load_documents, load_policies
     from ..core.device import describe_device, resolve_device
 except ImportError:  # python src/rag/cli/build_index.py 직접 실행도 지원
     project_dir = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(project_dir))
     from src.rag.core.config import DEFAULT_SETTINGS, PROJECT_DIR
-    from src.rag.core.data_loader import load_documents
+    from src.rag.core.data_loader import load_documents, load_policies
     from src.rag.core.device import describe_device, resolve_device
+
+
+NATIONWIDE_MIN_ZIP_CODE_COUNT = 200
+
+
+def region_metadata(policy: Mapping[str, Any]) -> dict[str, object]:
+    """zipCdList의 시도 코드와 전국 정책 여부를 검색 메타데이터로 만든다."""
+    raw_codes = policy.get("zipCdList") or policy.get("zipCd") or []
+    if isinstance(raw_codes, str):
+        raw_codes = [part.strip() for part in raw_codes.split(",")]
+    zip_codes = {
+        str(code).strip()
+        for code in raw_codes
+        if code not in (None, "") and len(str(code).strip()) >= 2
+    }
+    region_codes = sorted(
+        {code[:2] for code in zip_codes}
+    )
+    return {
+        "region_codes": region_codes,
+        "is_nationwide": len(zip_codes) >= NATIONWIDE_MIN_ZIP_CODE_COUNT,
+    }
+
+
+def add_region_metadata(
+    documents: list[dict[str, Any]],
+    policies: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """문서의 policy_id로 structured 정책을 연결해 지역 메타데이터를 붙인다."""
+    enriched: list[dict[str, Any]] = []
+    missing_policy_ids: set[str] = set()
+    for document in documents:
+        policy_id = str(document["policy_id"])
+        policy = policies.get(policy_id)
+        item = dict(document)
+        if policy is None:
+            missing_policy_ids.add(policy_id)
+            item.update({"region_codes": [], "is_nationwide": False})
+        else:
+            item.update(region_metadata(policy))
+        enriched.append(item)
+    if missing_policy_ids:
+        sample = ", ".join(sorted(missing_policy_ids)[:5])
+        print(
+            f"경고: structured 정책을 찾지 못한 policy_id {len(missing_policy_ids):,}개 "
+            f"(예: {sample})"
+        )
+    return enriched
 
 
 def build_index(
@@ -35,8 +84,11 @@ def build_index(
     requested_device: str = DEFAULT_SETTINGS.device,
     use_fp16: bool = DEFAULT_SETTINGS.use_fp16,
     with_chroma: bool = False,
+    policies_path: Path = DEFAULT_SETTINGS.policies_path,
 ) -> dict[str, object]:
     documents = load_documents(documents_path)
+    policies = load_policies(policies_path)
+    documents = add_region_metadata(documents, policies)
     storage_dir.mkdir(parents=True, exist_ok=True)
     print(f"문서 {len(documents):,}개를 불러왔습니다.")
     device = resolve_device(requested_device)
@@ -86,6 +138,8 @@ def build_index(
                     {
                         "policy_id": document["policy_id"],
                         "section": document["section"],
+                        "region_codes": ",".join(document["region_codes"]),
+                        "is_nationwide": document["is_nationwide"],
                     }
                     for document in batch
                 ],
@@ -97,6 +151,7 @@ def build_index(
     manifest: dict[str, object] = {
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "documents_path": _manifest_path(documents_path),
+        "policies_path": _manifest_path(policies_path),
         "document_count": len(documents),
         "model_name": model_name,
         "embedding_dimension": int(embeddings.shape[1]),
@@ -107,6 +162,14 @@ def build_index(
         "normalized": True,
         "vector_db": "faiss+chroma" if with_chroma else "faiss",
         "chroma_collection": DEFAULT_SETTINGS.chroma_collection if with_chroma else None,
+        "metadata_fields": [
+            "chunk_id",
+            "policy_id",
+            "section",
+            "region_codes",
+            "is_nationwide",
+        ],
+        "nationwide_min_zip_code_count": NATIONWIDE_MIN_ZIP_CODE_COUNT,
     }
     with (storage_dir / "manifest.json").open("w", encoding="utf-8") as file:
         json.dump(manifest, file, ensure_ascii=False, indent=2)
@@ -126,6 +189,7 @@ def _manifest_path(path: Path) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="청년정책 임베딩 인덱스를 생성합니다.")
     parser.add_argument("--documents", type=Path, default=DEFAULT_SETTINGS.documents_path)
+    parser.add_argument("--policies", type=Path, default=DEFAULT_SETTINGS.policies_path)
     parser.add_argument("--storage", type=Path, default=DEFAULT_SETTINGS.storage_dir)
     parser.add_argument("--model", default=DEFAULT_SETTINGS.model_name)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_SETTINGS.batch_size)
@@ -143,14 +207,15 @@ def main() -> None:
     )
     args = parser.parse_args()
     build_index(
-        args.documents,
-        args.storage,
-        args.model,
-        args.batch_size,
-        args.max_seq_length,
-        args.device,
-        not args.fp32,
-        args.with_chroma,
+        documents_path=args.documents,
+        storage_dir=args.storage,
+        model_name=args.model,
+        batch_size=args.batch_size,
+        max_seq_length=args.max_seq_length,
+        requested_device=args.device,
+        use_fp16=not args.fp32,
+        with_chroma=args.with_chroma,
+        policies_path=args.policies,
     )
 
 

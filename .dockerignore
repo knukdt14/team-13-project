@@ -1,0 +1,35 @@
+# 이미지에 들어가면 안 되거나, 들어갈 필요가 없는 것들.
+# COPY 는 .gitignore 를 보지 않으므로 여기에 따로 적어야 한다.
+
+.git
+.github
+.venv
+venv
+__pycache__
+**/__pycache__
+**/*.py[cod]
+
+# API 키가 이미지에 구워지는 사고를 막는다. compose 의 environment 로 넘긴다.
+**/.env
+!**/.env.example
+
+# 로컬 산출물
+app.db
+*.db
+chroma_db/
+frontend/node_modules
+frontend/dist
+
+# 런타임에 쓰지 않는 대용량 원본 (수집·인덱싱 때만 필요)
+data/youth_policies_raw.json
+data/policies_rag_docs.json
+data/*.pdf
+data/*.xlsx
+data/zipcode_db/
+data/zipcode_DB.zip
+
+# 문서·개발용
+docs/
+tests/
+*.md
+!README.md

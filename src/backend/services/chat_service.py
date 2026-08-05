@@ -1,9 +1,20 @@
-"""실물 RAG와 API 스키마 사이의 어댑터 및 대화 저장 오케스트레이션."""
+"""AI 서비스 어댑터 및 대화 저장 오케스트레이션.
+
+컨테이너 분리 후, 이 서비스가 AI 컨테이너에 HTTP로 물어보는 것은 두 가지뿐이다.
+
+    1) 정책 검색   ai.search(...)          FAISS 인덱스와 임베딩 모델이 필요
+    2) 답변 생성   ai.stream_generate(...) Solar API 호출이 필요
+
+정책 원본 조회와 자격 판정은 모델이 필요 없는 순수 계산이므로 백엔드가 직접
+한다(``policy_service.policy_records`` · ``PolicyFilter``). 덕분에 정책 목록·
+지도·자격 진단은 AI 컨테이너가 죽어 있어도 정상 동작한다.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import lru_cache
 from time import perf_counter
 from typing import Any
 
@@ -17,12 +28,21 @@ from src.backend.schemas import (
     Source,
     UserProfile,
 )
+from src.backend.services.ai_client import AIClient
 from src.backend.services.document_service import DocumentService
 from src.backend.services.policy_service import (
     is_nationwide,
+    policy_records,
     policy_to_card,
     profile_filters,
 )
+from src.rag.eligibility import PolicyFilter
+
+
+@lru_cache(maxsize=1)
+def _policy_filter() -> PolicyFilter:
+    """모델이 필요 없는 순수 판정기. 백엔드 프로세스에서 직접 쓴다."""
+    return PolicyFilter()
 
 
 @dataclass
@@ -41,11 +61,15 @@ class PreparedAnswer:
 
 
 class ChatService:
-    def __init__(self, repository: Repository, retriever: Any, generator: Any | None):
+    def __init__(self, repository: Repository, ai: AIClient | None = None):
         self.repository = repository
-        self.retriever = retriever
-        self.generator = generator
+        self.ai = ai
         self.documents = DocumentService(repository)
+
+    def _require_ai(self) -> AIClient:
+        if self.ai is None:
+            raise RAGUnavailableError("AI 서비스가 연결되지 않았어요.")
+        return self.ai
 
     @staticmethod
     def _source(result: dict[str, Any], raw_policy: dict[str, Any] | None) -> Source:
@@ -70,8 +94,11 @@ class ChatService:
     def _search(self, request: AskRequest) -> tuple[SearchResult, list[dict[str, Any]], dict[str, Any]]:
         profile = request.profile or UserProfile()
         filters = profile_filters(profile)
+        # 정책 원본은 백엔드도 갖고 있다. AI 응답에는 policy_id 만 오므로
+        # 카드 변환·전국 판정은 이 로컬 사전으로 처리한다.
+        records = policy_records()
 
-        # PolicyRetriever에는 include_nationwide 옵션이 없다. 기존 API와 지도에서
+        # AI 서비스에는 include_nationwide 옵션이 없다. 기존 API와 지도에서
         # 검증된 동작을 유지하기 위해 지역 조건이 있을 때 넉넉히 검색한 뒤,
         # 전국 정책을 백엔드에서 제거하고 요청한 top_k만 남긴다.
         search_top_k = request.top_k
@@ -79,7 +106,7 @@ class ChatService:
         if exclude_nationwide:
             search_top_k = max(request.top_k * 5, 25)
 
-        raw = self.retriever.search(
+        raw = self._require_ai().search(
             request.question,
             top_k=search_top_k,
             filters=filters or None,
@@ -90,24 +117,19 @@ class ChatService:
         if exclude_nationwide:
             policies = [
                 item for item in policies
-                if not is_nationwide(
-                    self.retriever.policies.get(str(item.get("policy_id")), {})
-                )
+                if not is_nationwide(records.get(str(item.get("policy_id")), {}))
             ]
         policies = policies[: request.top_k]
 
         sources = [
-            self._source(
-                item,
-                self.retriever.policies.get(str(item.get("policy_id"))),
-            )
+            self._source(item, records.get(str(item.get("policy_id"))))
             for item in policies
         ]
         result = SearchResult(
             sources=sources,
             matched_policies=[source.plcy_no for source in sources],
             matched=len(policies),
-            total=len(self.retriever.policies),
+            total=len(records),
             relevant=bool(policies),
         )
         conditions = dict(raw.get("extracted_conditions") or filters)
@@ -153,10 +175,8 @@ class ChatService:
         }
 
     def _ensure_generator(self, prepared: PreparedAnswer) -> None:
-        if prepared.has_evidence and self.generator is None:
-            raise RAGUnavailableError(
-                "답변 생성기가 준비되지 않았어요. UPSTAGE_API_KEY를 확인해주세요."
-            )
+        if prepared.has_evidence:
+            self._require_ai().require_generator()
 
     def _tokens(self, prepared: PreparedAnswer) -> Iterator[str]:
         if not prepared.has_evidence:
@@ -165,12 +185,7 @@ class ChatService:
         policies = list(prepared.policies)
         if prepared.attachment_text:
             policies.insert(0, self._attachment_policy(prepared.attachment_text))
-        generator = self.generator
-        if generator is None:
-            raise RAGUnavailableError(
-                "답변 생성기가 준비되지 않았어요. UPSTAGE_API_KEY를 확인해주세요."
-            )
-        yield from generator.stream_answer(
+        yield from self._require_ai().stream_generate(
             prepared.request.question,
             prepared.conditions,
             policies,
@@ -228,11 +243,13 @@ class ChatService:
         )
 
     def eligibility(self, profile: UserProfile) -> EligibilityResponse:
+        """모델이 필요 없는 순수 판정. AI 컨테이너가 꺼져 있어도 동작한다."""
         conditions = profile_filters(profile)
+        policy_filter = _policy_filter()
         eligible = [
             policy_id
-            for policy_id, policy in self.retriever.policies.items()
-            if self.retriever.policy_filter.matches(policy, conditions, include_closed=False)
+            for policy_id, policy in policy_records().items()
+            if policy_filter.matches(policy, conditions, include_closed=False)
             and not (profile.region and is_nationwide(policy))
         ]
         return EligibilityResponse(

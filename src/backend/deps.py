@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any
 
 from fastapi import Request
 
 from src.backend.db.database import connect
 from src.backend.db.repository import Repository
 from src.backend.errors import RAGUnavailableError
+from src.backend.services.ai_client import AIClient
 
 
 def get_repository() -> Iterator[Repository]:
@@ -24,16 +24,13 @@ def get_repository() -> Iterator[Repository]:
         database.close()
 
 
-def get_retriever(request: Request) -> Any:
-    retriever = getattr(request.app.state, "retriever", None)
-    if retriever is None:
-        detail = getattr(request.app.state, "retriever_error", None)
-        raise RAGUnavailableError(
-            f"정책 검색기가 준비되지 않았어요. {detail or 'FAISS 인덱스를 확인해주세요.'}"
-        )
-    return retriever
+def get_ai_client(request: Request) -> AIClient:
+    """AI 서비스 클라이언트. 연결 자체가 없으면 즉시 503으로 돌린다.
 
-
-def get_generator(request: Request) -> Any | None:
-    """키가 없어도 앱과 검색 API가 뜨도록 생성기는 선택적으로 주입한다."""
-    return getattr(request.app.state, "generator", None)
+    실제 준비 상태(모델 적재 완료 여부)는 호출 직전에 ``require_*`` 로 확인한다.
+    여기서 매번 health 를 부르면 정책 목록·지도까지 느려지기 때문이다.
+    """
+    client = getattr(request.app.state, "ai", None)
+    if client is None:
+        raise RAGUnavailableError("AI 서비스 연결이 초기화되지 않았어요.")
+    return client

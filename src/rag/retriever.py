@@ -231,7 +231,7 @@ class PolicyRetriever:
                 "keywords": policy.get("plcyKywdNm"),
                 "min_age": policy.get("sprtTrgtMinAge"),
                 "max_age": policy.get("sprtTrgtMaxAge"),
-                "age_limited": policy.get("sprtTrgtAgeLmtYn") == "Y",
+                "age_limited": policy.get("sprtTrgtAgeLmtYn") == "N",
                 "job_statuses": policy.get("jobCdNmList") or [],
                 "school_statuses": policy.get("schoolCdNmList") or [],
                 "income_condition": policy.get("earnCndSeCdNm"),
@@ -245,6 +245,8 @@ class PolicyRetriever:
                 "organization": policy.get("operInstCdNm") or policy.get("rgtrInstCdNm"),
                 "application_url": policy.get("aplyUrlAddr"),
                 "reference_url": policy.get("refUrlAddr1") or policy.get("refUrlAddr2"),
+                "region_codes": chunk.get("region_codes") or [],
+                "is_nationwide": bool(chunk.get("is_nationwide", False)),
             },
         }
 
