@@ -21,6 +21,10 @@ frontend/node_modules
 frontend/dist
 
 # 런타임에 쓰지 않는 대용량 원본 (수집·인덱싱 때만 필요)
+#
+# policies_rag_docs.json 은 src/rag/cli/build_index.py 만 읽는다. 인덱스는
+# 이미 만들어져 src/rag/storage/ 에 들어가므로 컨테이너에는 필요 없다.
+# 인덱스를 컨테이너 안에서 만들려면 이 줄을 지워야 한다.
 data/youth_policies_raw.json
 data/policies_rag_docs.json
 data/*.pdf
@@ -31,5 +35,6 @@ data/zipcode_DB.zip
 # 문서·개발용
 docs/
 tests/
+src/rag/tests/
 *.md
 !README.md

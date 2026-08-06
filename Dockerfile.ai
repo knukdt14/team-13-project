@@ -25,7 +25,17 @@ RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 
  && pip install --no-cache-dir -r requirements.ai.txt
 
 # 소스는 의존성 뒤에 복사한다. 코드만 고쳤을 때 pip 레이어를 재사용하기 위해서다.
+#
+# src/rag/ 에는 미리 만든 FAISS 인덱스(src/rag/storage/, 약 14MB)가 함께
+# 들어간다. 컨테이너에서 인덱스를 새로 만들면 임베딩에만 수십 분이 걸린다.
+# 인덱스는 git 에 커밋돼 있으므로 빌드 시점에 그대로 복사된다.
+#   index.faiss · chunk_metadata.json · manifest.json
+#
+# manifest.json 이 없으면 retriever 가 뜨지 않는다. 인덱스를 만든 임베딩 모델과
+# 실행 시 모델이 같은지 여기서 대조하기 때문이다.
 COPY src/shared/ ./src/shared/
+# cli는 데이터 파일을 마운트해 인덱스를 점검·재생성할 때 쓸 수 있어 남긴다.
+# 런타임과 무관한 src/rag/tests/는 .dockerignore에서 제외한다.
 COPY src/rag/ ./src/rag/
 COPY src/ai/ ./src/ai/
 

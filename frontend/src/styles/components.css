@@ -236,31 +236,44 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: 520px;
+  max-width: 620px;
   margin-top: 26px;
-  padding: 7px 7px 7px 20px;
-  border: 1px solid rgba(113, 87, 232, 0.22);
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: var(--shadow-sm);
+  padding: 9px 9px 9px 20px;
+  border: 1px solid rgba(87, 61, 82, 0.14);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(73, 49, 70, 0.07);
   transition: border-color 180ms ease, box-shadow 180ms ease;
   animation: rise 0.6s var(--ease-out) 0.44s both;
 }
 
+/* 홈의 랭킹 목록은 문서 높이를 늘리지 않는 드롭다운이다. 목록이 헤더 아래로
+   겹쳐질 수 있게 홈에서만 세로 overflow 를 연다. 가로 넘침은 .app 이 자른다. */
+.masthead:not(.is-compact) {
+  z-index: 4;
+  overflow: visible;
+}
+
+/* overflow 를 열어도 아래쪽 배경 원이 헤더 밖으로 새지 않게, 원래 헤더 안에
+   보이던 위쪽 115px만 남긴다. */
+.masthead:not(.is-compact)::before {
+  clip-path: inset(0 0 145px 0);
+}
+
 .hero-ask:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-wash), var(--shadow-sm);
+  border-color: rgba(255, 93, 80, 0.55);
+  box-shadow: 0 0 0 4px var(--primary-wash), 0 10px 26px rgba(73, 49, 70, 0.08);
 }
 
 .hero-ask-input {
   flex: 1;
   min-width: 0;
-  padding: 12px 0;
+  padding: 13px 0;
   border: 0;
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 15.5px;
+  font-size: 17px;
 }
 
 .hero-ask-input:focus { outline: none; }
@@ -268,55 +281,201 @@
 
 .hero-ask-send {
   flex: 0 0 auto;
-  min-height: 44px;
-  padding: 0 21px;
+  min-height: 52px;
+  padding: 0 23px;
   border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
+  border-radius: 15px;
+  background: var(--primary);
   color: #fff;
   font: inherit;
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 750;
   cursor: pointer;
   transition: background 160ms ease, transform 160ms ease;
 }
 
-.hero-ask-send:hover { background: var(--accent-dark); transform: translateY(-1px); }
+.hero-ask-send:hover { background: var(--primary-dark); transform: translateY(-1px); }
 
-.hero-ask-examples {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin: 13px 0 0;
+.hero-suggestions {
+  max-width: 650px;
+  margin-top: 19px;
   animation: rise 0.6s var(--ease-out) 0.52s both;
 }
 
-.hero-ask-examples > span {
+.hero-suggestions > p {
+  margin: 0 0 10px 2px;
   color: var(--text-faint);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 13.5px;
+  font-weight: 700;
 }
 
-/* 예시를 누르면 그 질문으로 바로 넘어간다. 무엇을 물어도 되는지 보여주는
-   역할이 먼저라 링크처럼 보이지 않게 조용히 둔다. */
-.hero-ask-examples button {
-  padding: 7px 13px;
-  border: 1px solid rgba(113, 87, 232, 0.18);
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.7);
+.hero-suggestions ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hero-suggestions button {
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid rgba(87, 61, 82, 0.11);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
   color: var(--text-soft);
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 650;
-  cursor: pointer;
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+  text-align: left;
+  transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
 }
 
-.hero-ask-examples button:hover {
-  border-color: var(--accent);
+.hero-suggestions button:hover {
+  border-color: rgba(255, 93, 80, 0.3);
+  background: #fff;
+  color: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+/* 조회수 상위 정책이 한 건씩 돌아간다. 오른쪽 버튼으로 10위까지 펼친다. */
+.ranking {
+  max-width: 520px;
+  margin: 14px 0 0;
+  animation: rise 0.6s var(--ease-out) 0.52s both;
+}
+
+.ranking-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 15px;
+  border: 1px solid rgba(113, 87, 232, 0.15);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.ranking.is-open .ranking-bar {
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.ranking-label {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 돌아가는 자리. 폭이 흔들리지 않게 남은 공간을 전부 차지한다. */
+.ranking-stage {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ranking-stage > button {
+  animation: ranking-in 0.42s var(--ease-out) both;
+}
+
+@keyframes ranking-in {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ranking-stage > button,
+.ranking-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ranking-number {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
   background: var(--accent-wash);
   color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ranking-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-stage > button:hover .ranking-title,
+.ranking-list button:hover .ranking-title {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.ranking-count {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.ranking-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.ranking-toggle:hover { background: var(--accent-dark); }
+.ranking-toggle > span { transition: transform 200ms ease; }
+.ranking.is-open .ranking-toggle > span { transform: rotate(180deg); }
+
+.ranking-list {
+  margin: 0;
+  padding: 6px 15px 12px;
+  border: 1px solid rgba(113, 87, 232, 0.15);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: rgba(255, 255, 255, 0.92);
+  list-style: none;
+}
+
+.ranking-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+/* 1~3위만 강조한다. 열 개를 다 칠하면 순위가 안 보인다. */
+.ranking-list li:nth-child(-n + 3) .ranking-number {
+  background: var(--accent);
+  color: #fff;
 }
 
 @keyframes rise {
@@ -341,6 +500,157 @@
   initial-value: 0deg;
 }
 
+.hero-showcase {
+  min-width: 0;
+  align-self: center;
+  animation: showcase-float 6.4s ease-in-out 1.05s infinite;
+  will-change: transform;
+}
+
+/* 보라색 미리보기와 랭킹은 한 개의 히어로 오브젝트다. 랭킹만 바닥에
+   고정돼 보이지 않도록 바깥 묶음을 움직이고, 카드의 3D 기울기는 안쪽에서 맡는다. */
+@keyframes showcase-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  28% { transform: translate3d(0, -14px, 0); }
+  58% { transform: translate3d(0, 5px, 0); }
+  80% { transform: translate3d(0, -7px, 0); }
+}
+
+/* 펼친 목록을 읽을 때만 멈춘다. 단순 hover 때 animation-play-state 를 바꾸면
+   합성 레이어가 다시 그려지며 버튼 배경이 번쩍이는 브라우저가 있다. */
+.hero-showcase:has(.ranking.is-open) {
+  animation-play-state: paused;
+}
+
+.hero-ranking .ranking {
+  position: relative;
+  z-index: 6;
+  width: calc(100% - 20px);
+  max-width: none;
+  margin: 34px auto 0;
+  animation: hero-ranking-pop 0.62s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.hero-ranking .ranking-bar {
+  min-height: 72px;
+  gap: 12px;
+  padding: 10px 10px 10px 18px;
+  border-color: rgba(113, 87, 232, 0.2);
+  border-radius: 20px;
+  background:
+    linear-gradient(115deg, rgba(245, 242, 255, 0.96), rgba(255, 255, 255, 0.94) 42%),
+    rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 18px 38px rgba(67, 48, 137, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.hero-ranking .ranking.is-open .ranking-bar {
+  border-radius: 20px 20px 0 0;
+}
+
+.hero-ranking .ranking-label {
+  color: #756d80;
+  font-size: 13.5px;
+}
+
+.hero-ranking .ranking-number {
+  width: 25px;
+  height: 25px;
+  border-radius: 8px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 12.5px;
+}
+
+.hero-ranking .ranking-stage > button,
+.hero-ranking .ranking-list button {
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 15px;
+}
+
+.hero-ranking .ranking-count {
+  font-size: 12.5px;
+}
+
+.hero-ranking .ranking-toggle {
+  min-height: 48px;
+  padding: 0 16px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--primary);
+  background-image: none;
+  box-shadow:
+    0 7px 16px rgba(255, 93, 80, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  font-size: 13.5px;
+  backface-visibility: hidden;
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.hero-ranking .ranking-toggle:hover {
+  background-color: var(--primary-dark);
+  background-image: none;
+  box-shadow:
+    0 9px 20px rgba(255, 93, 80, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.hero-ranking .ranking-toggle:active {
+  background-color: var(--primary-dark);
+  background-image: none;
+  transform: translateY(0) scale(0.98);
+}
+
+.hero-ranking .ranking-list {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% - 1px);
+  right: 0;
+  left: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border-color: rgba(113, 87, 232, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 20px 38px rgba(67, 48, 137, 0.14);
+  transform-origin: top center;
+  animation: ranking-dropdown-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: clip-path, opacity, transform;
+}
+
+.hero-ranking .ranking-list li {
+  animation: ranking-row-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--ranking-delay);
+}
+
+@keyframes ranking-dropdown-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0 round 0 0 20px 20px);
+    transform: translateY(-10px) scaleY(0.94);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 0 0 20px 20px);
+    transform: none;
+  }
+}
+
+@keyframes ranking-row-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes hero-ranking-pop {
+  0% { opacity: 0; transform: translateY(-22px) scale(0.88); }
+  68% { opacity: 1; transform: translateY(3px) scale(1.035); }
+  100% { opacity: 1; transform: none; }
+}
+
 .hero-preview {
   --preview-tilt-x: 0deg;
   --preview-tilt-y: 0deg;
@@ -358,11 +668,7 @@
   /* 자식들이 translateZ 로 앞뒤에 놓인다. 카드가 기울 때 이들이 서로
      다른 속도로 밀리면서 깊이가 생긴다. 시차를 따로 만들 필요가 없다. */
   transform-style: preserve-3d;
-  /* 등장이 끝나는 1.05초부터 부유가 이어받는다. card-float 은 fill-mode 가
-     없어서 그전에는 관여하지 않고, 0% 값이 card-in 의 끝값과 같아 안 튄다. */
-  animation:
-    card-in 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both,
-    card-float 6.4s ease-in-out 1.05s infinite;
+  animation: card-in 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
   transition: --preview-tilt-x 180ms ease, --preview-tilt-y 180ms ease, box-shadow 180ms ease;
   will-change: transform;
 }
@@ -371,15 +677,6 @@
   box-shadow:
     0 42px 82px rgba(65, 44, 157, 0.34),
     0 12px 22px rgba(50, 32, 129, 0.18);
-}
-
-/* 위아래 폭이 좁고 주기가 길다. 눈에 띄면 읽는 데 방해가 된다.
-   세 지점을 다르게 둬서 메트로놈처럼 왔다 갔다 하지 않게 했다. */
-@keyframes card-float {
-  0%, 100% { transform: translate3d(0, 0, 0) rotateZ(1.5deg) rotateX(calc(4deg + var(--preview-tilt-x))) rotateY(calc(-6deg + var(--preview-tilt-y))); }
-  28% { transform: translate3d(0, -14px, 10px) rotateZ(1deg) rotateX(calc(7deg + var(--preview-tilt-x))) rotateY(calc(-2deg + var(--preview-tilt-y))); }
-  58% { transform: translate3d(0, 5px, 0) rotateZ(2deg) rotateX(calc(1deg + var(--preview-tilt-x))) rotateY(calc(5deg + var(--preview-tilt-y))); }
-  80% { transform: translate3d(0, -7px, 6px) rotateZ(1.2deg) rotateX(calc(-2deg + var(--preview-tilt-x))) rotateY(calc(-4deg + var(--preview-tilt-y))); }
 }
 
 .hero-preview::before {
@@ -443,7 +740,7 @@
 
 @keyframes card-in {
   from { opacity: 0; transform: translateY(26px) rotate(-2deg) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) rotateZ(1.5deg) rotateX(4deg) rotateY(-6deg) scale(1); }
+  to { opacity: 1; transform: translateY(0) rotateZ(1.5deg) rotateX(calc(4deg + var(--preview-tilt-x))) rotateY(calc(-6deg + var(--preview-tilt-y))) scale(1); }
 }
 
 /* translateZ 로 카드보다 앞에 띄운다. 카드가 기울면 이 값 차이만큼
@@ -1343,7 +1640,10 @@
 }
 
 .sources-carousel .policy-card {
-  height: 218px;
+  /* height 로 고정하면 준비 서류를 펼쳤을 때 내용이 잘리고 스크롤도 안 생긴다.
+     (.policy-card 에 overflow: hidden 이 있어서 넘친 부분이 사라진다)
+     min-height 로 두면 평소 높이는 같고 펼칠 때만 늘어난다. */
+  min-height: 218px;
   padding: 15px 16px 15px 20px;
   border-color: rgba(222, 216, 226, 0.72);
   border-radius: 17px;
@@ -1371,6 +1671,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 캐러셀은 가로 한 줄이라 카드 하나가 커지면 옆 카드도 같이 커진다.
+   목록 화면보다 낮게 잡아 한 카드 때문에 줄 전체가 치솟지 않게 한다. */
+.sources-carousel .policy-docs-body {
+  max-height: 124px;
 }
 
 .sources-carousel .policy-summary {
@@ -1680,6 +1986,80 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
+}
+
+/* 제출서류. 기본은 접혀 있고 카드 높이에 영향을 주지 않는다.
+   details/summary 라 자바스크립트 없이 키보드로도 열린다. */
+.policy-docs {
+  margin-top: 11px;
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+}
+
+.policy-docs > summary {
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.policy-docs > summary::-webkit-details-marker { display: none; }
+
+.policy-docs > summary::after {
+  content: ' ⌄';
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+.policy-docs[open] > summary::after { transform: rotate(180deg); }
+
+/* 최대 1,132자짜리 공고도 있다. 스크롤은 이 상자 하나가 맡는다.
+   카드가 무한정 길어지지 않아서 챗봇의 가로 캐러셀 안에서도 안전하다. */
+.policy-docs-body {
+  max-height: 178px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 9px 0 0;
+  padding-right: 4px;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.policy-docs-body p { margin: 0; }
+
+.policy-docs-body ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+}
+
+/* 번호를 다시 붙이지 않는다. 원문에 이미 "1." 이 있으면 두 번 보인다.
+   대신 점으로 항목 경계만 표시한다. */
+.policy-docs-body li {
+  position: relative;
+  padding-left: 13px;
+}
+
+.policy-docs-body li::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.policy-docs-note {
+  margin: 9px 0 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  line-height: 1.6;
 }
 
 /* 대분류가 여럿인 정책이 105건 있다. 배지를 나란히 놓고 줄바꿈을 허용한다. */
@@ -2770,6 +3150,17 @@
 
 .apply-summary {
   display: -webkit-box;
+  overflow: hidden;
+  margin: 7px 0 0;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.apply-summary {
+  display: -webkit-box;
   margin: 10px 0 0;
   overflow: hidden;
   color: var(--text-faint);
@@ -3102,7 +3493,8 @@
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; min-height: 0; padding-top: 52px; padding-bottom: 60px; }
   .hero-copy { max-width: 660px; }
-  .hero-preview { width: min(540px, 92%); margin: 0 auto; }
+  .hero-showcase { width: min(540px, 92%); margin: 0 auto; }
+  .hero-preview { width: 100%; margin: 0; }
   .columns { grid-template-columns: 1fr; }
   .conditions, .stage { width: 100%; min-width: 0; }
   .conditions { position: static; }
@@ -3176,11 +3568,20 @@
   .hero-ask { flex-direction: column; align-items: stretch; gap: 6px; padding: 14px; border-radius: var(--radius); }
   .hero-ask-input { padding: 6px 6px 2px; }
   .hero-ask-send { width: 100%; }
+  .hero-suggestions ul { display: grid; grid-template-columns: 1fr; }
+  .hero-suggestions button { width: 100%; }
+  /* 좁은 화면에서는 한 줄에 라벨·제목·버튼이 다 안 들어간다.
+     라벨을 위로 올리고 조회수는 감춘다. 제목이 제일 중요하다. */
+  .ranking-bar { flex-wrap: wrap; border-radius: var(--radius); padding: 11px 13px; }
+  .ranking-label { flex: 1 0 100%; }
+  .ranking-count { display: none; }
   .desktop-break { display: none; }
   /* 모바일은 카드를 기울이지도, 띄우지도 않는다. 애니메이션이 transform 을
      덮어쓰므로 끝값이 none 인 전용 키프레임으로 통째로 바꾼다.
      animation-name 만 바꾸면 duration·delay 가 두 개인 채로 남아 어긋난다. */
   .hero-preview { width: calc(100% - 10px); max-width: calc(100vw - 44px); min-height: 220px; padding: 22px; border-radius: 30px; transform: none; animation: card-in-flat 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both; }
+  .hero-showcase { width: 100%; animation: none; transform: none; will-change: auto; }
+  .hero-ranking .ranking { width: calc(100% - 10px); margin-right: auto; margin-left: auto; }
   .hero-preview::before { width: 58px; height: 58px; right: -14px; top: -18px; border-radius: 19px; }
 
   @keyframes card-in-flat {

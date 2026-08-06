@@ -28,6 +28,14 @@ class PolicyCard(BaseModel):
     can_apply_directly: bool = Field(
         default=False, description="신청 페이지 주소 제공 여부",
     )
+    documents: list[str] = Field(
+        default_factory=list,
+        description="기관이 공고에 적어 둔 제출 서류를 항목별로 나눈 것. 문구는 원문 그대로다.",
+    )
+    view_count: int = Field(
+        default=0,
+        description="온통청년에서 수집한 시점의 누적 조회수. 실시간이 아니다.",
+    )
 
 
 class PolicyDetail(PolicyCard):
