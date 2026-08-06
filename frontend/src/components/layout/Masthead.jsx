@@ -1,14 +1,43 @@
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import useCountUp from '../../hooks/useCountUp'
+
+const EXAMPLES = ['월세 지원', '창업 지원금', '자격증 응시료']
+
+function tiltPreview(event) {
+  if (event.pointerType === 'touch') return
+  const card = event.currentTarget
+  const bounds = card.getBoundingClientRect()
+  const horizontal = (event.clientX - bounds.left) / bounds.width - 0.5
+  const vertical = (event.clientY - bounds.top) / bounds.height - 0.5
+  card.style.setProperty('--preview-tilt-x', `${vertical * -8}deg`)
+  card.style.setProperty('--preview-tilt-y', `${horizontal * 10}deg`)
+}
+
+function resetPreview(event) {
+  event.currentTarget.style.setProperty('--preview-tilt-x', '0deg')
+  event.currentTarget.style.setProperty('--preview-tilt-y', '0deg')
+}
 
 // 히어로 미리보기는 이 서비스가 하는 일을 2.5초 동안 재연한다.
 // 질문이 올라가고 → 점 세 개가 뜨고 → 답이 도착하고 → 분야 태그가 붙고
 // → 건수가 올라간다. 정지된 스크린샷 대신 제품 자체를 보여주는 셈이다.
 // 순서는 components.css 의 animation-delay 가 맡는다.
-export default function Masthead({ total }) {
+export default function Masthead({ total, isHome = false }) {
   const counted = useCountUp(total, { delay: 2350 })
+  const navigate = useNavigate()
+  const [question, setQuestion] = useState('')
+
+  // 히어로에서 바로 물어볼 수 있게 한다. 예전에는 "30초 맞춤 정책 찾기" 같은
+  // 버튼이 /chat 으로 보냈는데, 그게 챗봇이라는 걸 알 방법이 없었다.
+  // 입력창이 있으면 설명이 필요 없다.
+  const ask = (text) => {
+    const trimmed = text.trim()
+    navigate(trimmed ? `/chat?q=${encodeURIComponent(trimmed)}` : '/chat')
+  }
 
   return (
-    <header className="masthead">
+    <header className={`masthead${isHome ? '' : ' is-compact'}`}>
       <div className="masthead-inner">
         <p className="brand">
           <span className="brand-mark" aria-hidden="true"><span /></span>
@@ -16,7 +45,7 @@ export default function Masthead({ total }) {
         </p>
         <p className="brand-note"><span aria-hidden="true">●</span> 청년정책 {total?.toLocaleString() || '—'}건을 살펴볼 수 있어요</p>
       </div>
-      <div className="hero">
+      {isHome && <div className="hero">
         <div className="hero-copy">
           <p className="hero-kicker"><span aria-hidden="true">✦</span> 어려운 공고문은 이제 그만</p>
           <h1>
@@ -24,8 +53,29 @@ export default function Masthead({ total }) {
             <span className="hero-line"><em>내게 맞는 것만</em> 찾아봐요</span>
           </h1>
           <p className="hero-description">나이와 지역을 알려주면 복잡한 청년정책을<br className="desktop-break" /> 쉽고 빠르게 골라드려요.</p>
+
+          <form className="hero-ask" onSubmit={(event) => { event.preventDefault(); ask(question) }}>
+            <input
+              className="hero-ask-input"
+              type="text"
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              placeholder="어떤 지원이 궁금하세요?"
+              aria-label="정책 상담 질문"
+            />
+            <button className="hero-ask-send" type="submit">
+              물어보기<span aria-hidden="true"> →</span>
+            </button>
+          </form>
+
+          <p className="hero-ask-examples">
+            <span>이런 걸 물어보세요</span>
+            {EXAMPLES.map((example) => (
+              <button key={example} type="button" onClick={() => ask(example)}>{example}</button>
+            ))}
+          </p>
         </div>
-        <div className="hero-preview" aria-hidden="true">
+        <div className="hero-preview" aria-hidden="true" onPointerMove={tiltPreview} onPointerLeave={resetPreview}>
           <div className="preview-question">나도 받을 수 있는 지원이 있을까?</div>
           <div className="preview-reply">
             <div className="preview-thinking"><span className="dots"><i /><i /><i /></span></div>
@@ -36,7 +86,7 @@ export default function Masthead({ total }) {
           </div>
           <div className="preview-stat"><span>모아본 청년정책</span><strong>{(counted ?? 0).toLocaleString()}<small>건</small></strong></div>
         </div>
-      </div>
+      </div>}
     </header>
   )
 }

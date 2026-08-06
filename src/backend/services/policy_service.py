@@ -112,6 +112,8 @@ def policy_to_card(policy: Mapping[str, Any]) -> PolicyCard:
     summary = " ".join(
         str(policy.get("plcyExplnCn") or policy.get("plcySprtCn") or "").split()
     )
+    application_url = policy.get("aplyUrlAddr") or None
+    reference_url = policy.get("refUrlAddr1") or policy.get("refUrlAddr2") or None
     return PolicyCard(
         plcy_no=str(policy.get("plcyNo") or ""),
         title=str(policy.get("plcyNm") or "이름 없는 정책"),
@@ -127,7 +129,12 @@ def policy_to_card(policy: Mapping[str, Any]) -> PolicyCard:
         schools=list(policy.get("schoolCdNmList") or []),
         regions=regions,
         summary=summary[:160] + ("…" if len(summary) > 160 else ""),
-        apply_url=policy.get("aplyUrlAddr") or policy.get("refUrlAddr1"),
+        # apply_url은 기존 프론트 호환용이다. 새 화면에서는 아래 두 주소를
+        # 구분해 '바로 신청'과 '공고 보기' 문구를 정확히 표시한다.
+        apply_url=application_url or reference_url,
+        application_url=application_url,
+        reference_url=reference_url,
+        can_apply_directly=bool(application_url),
     )
 
 
@@ -195,10 +202,18 @@ class PolicyService:
         query: str | None,
         include_closed: bool,
         include_nationwide: bool,
+        direct_apply_only: bool = False,
+        category: str | None = None,
     ) -> list[dict[str, Any]]:
         conditions = profile_filters(profile)
+        # PolicyFilter 가 대분류(lclsfNm)로만 판정한다. UserProfile 에 넣지 않는
+        # 이유는 카테고리가 사용자 속성이 아니라 목록을 좁히는 조건이기 때문이다.
+        if category:
+            conditions["category"] = category
         found: list[dict[str, Any]] = []
         for policy in policy_records().values():
+            if direct_apply_only and not policy.get("aplyUrlAddr"):
+                continue
             if (
                 profile.region
                 and not include_nationwide
@@ -222,11 +237,19 @@ class PolicyService:
     def list(
         self, profile: UserProfile, *, query: str | None, include_closed: bool,
         include_nationwide: bool, page: int, size: int,
+        direct_apply_only: bool = False, sort: str = "default",
+        category: str | None = None,
     ) -> PolicyListResponse:
         found = self._matching(
             profile, query=query, include_closed=include_closed,
             include_nationwide=include_nationwide,
+            direct_apply_only=direct_apply_only, category=category,
         )
+        if sort == "deadline":
+            found.sort(key=lambda policy: (
+                _days_left(policy) is None,
+                _days_left(policy) if _days_left(policy) is not None else 10**9,
+            ))
         start = (page - 1) * size
         return PolicyListResponse(
             total=self.total, matched=len(found), page=page, size=size,
