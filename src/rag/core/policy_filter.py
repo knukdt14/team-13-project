@@ -51,7 +51,18 @@ def _as_list(value: Any) -> list[str]:
 
 class PolicyFilter:
     def __init__(self, today: date | None = None):
-        self.today = today or date.today()
+        # 날짜를 여기서 고정하면 안 된다.
+        #
+        # PolicyService 가 모듈을 읽을 때 딱 한 번 만들어지므로(routers/policies.py
+        # 의 `service = PolicyService()`), 서버를 하루 이상 켜 두면 어제 날짜로
+        # 마감을 판정한다. 어제 마감된 정책이 오늘도 "접수중"으로 남는다.
+        #
+        # today 를 넘기면 그 값을 쓰고(테스트용), 안 넘기면 볼 때마다 새로 읽는다.
+        self._today = today
+
+    @property
+    def today(self) -> date:
+        return self._today or date.today()
 
     def matches(
         self,
