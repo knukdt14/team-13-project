@@ -24,6 +24,7 @@
   left: -90px;
   bottom: -145px;
   background: rgba(255, 189, 63, 0.14);
+  animation: drift-slow 26s ease-in-out infinite;
 }
 
 .masthead::after {
@@ -32,6 +33,14 @@
   left: calc(50% + 34px);
   top: 146px;
   border: 8px solid rgba(255, 93, 80, 0.22);
+  animation: drift-slow 19s ease-in-out infinite reverse;
+}
+
+/* 배경 도형만 계속 움직인다. 나머지는 한 번 재생하고 멈춘다.
+   화면 전체가 계속 흔들리면 읽기가 불편해진다. */
+@keyframes drift-slow {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(20px, -16px); }
 }
 
 .masthead-inner,
@@ -127,6 +136,9 @@
   min-height: 340px;
   padding-top: 44px;
   padding-bottom: 44px;
+  /* 미리보기 카드가 rotateX·rotateY 로 기울 때 원근이 생긴다.
+     이게 없으면 회전이 그냥 납작하게 눌리는 것처럼 보인다. */
+  perspective: 1400px;
 }
 
 .hero-copy {
@@ -152,6 +164,7 @@
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.7);
   box-shadow: inset 0 0 0 1px rgba(255, 93, 80, 0.1);
+  animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .hero-copy h1 {
@@ -162,6 +175,15 @@
   letter-spacing: -0.052em;
 }
 
+/* 두 줄을 따로 띄운다. 예전 <br /> 자리다. */
+.hero-line {
+  display: block;
+  animation: rise 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hero-line:nth-child(1) { animation-delay: 0.1s; }
+.hero-line:nth-child(2) { animation-delay: 0.2s; }
+
 .hero-copy h1 em {
   position: relative;
   color: var(--primary);
@@ -169,6 +191,8 @@
   white-space: nowrap;
 }
 
+/* 형광펜으로 긋듯 왼쪽에서 오른쪽으로 그어진다.
+   "찾아봐요"라는 말을 그대로 보여주는 동작이다. */
 .hero-copy h1 em::after {
   content: '';
   position: absolute;
@@ -180,6 +204,8 @@
   border-radius: var(--radius-pill);
   background: rgba(255, 189, 63, 0.3);
   transform: rotate(-1deg);
+  transform-origin: left center;
+  animation: underline 0.55s cubic-bezier(0.65, 0, 0.35, 1) 0.62s both;
 }
 
 .hero-description {
@@ -187,6 +213,17 @@
   color: var(--text-soft);
   font-size: 17px;
   line-height: 1.7;
+  animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.34s both;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes underline {
+  from { transform: rotate(-1deg) scaleX(0); }
+  to { transform: rotate(-1deg) scaleX(1); }
 }
 
 .hero-preview {
@@ -198,6 +235,22 @@
   background: linear-gradient(145deg, #7862e8 0%, #6550d4 100%);
   box-shadow: 0 28px 60px rgba(89, 65, 186, 0.25);
   transform: rotate(1.5deg);
+  /* 자식들이 translateZ 로 앞뒤에 놓인다. 카드가 기울 때 이들이 서로
+     다른 속도로 밀리면서 깊이가 생긴다. 시차를 따로 만들 필요가 없다. */
+  transform-style: preserve-3d;
+  /* 등장이 끝나는 1.05초부터 부유가 이어받는다. card-float 은 fill-mode 가
+     없어서 그전에는 관여하지 않고, 0% 값이 card-in 의 끝값과 같아 안 튄다. */
+  animation:
+    card-in 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both,
+    card-float 9s ease-in-out 1.05s infinite;
+}
+
+/* 위아래 폭이 좁고 주기가 길다. 눈에 띄면 읽는 데 방해가 된다.
+   세 지점을 다르게 둬서 메트로놈처럼 왔다 갔다 하지 않게 했다. */
+@keyframes card-float {
+  0%, 100% { transform: rotate(1.5deg) translateY(0) rotateX(0deg) rotateY(0deg); }
+  32% { transform: rotate(1.5deg) translateY(-8px) rotateX(1.9deg) rotateY(-1.1deg); }
+  64% { transform: rotate(1.5deg) translateY(-3px) rotateX(-1deg) rotateY(1.3deg); }
 }
 
 .hero-preview::before {
@@ -211,8 +264,10 @@
   background: var(--sun);
   transform: rotate(16deg);
   box-shadow: 0 14px 25px rgba(255, 189, 63, 0.28);
+  animation: badge-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s both;
 }
 
+/* 보낸 메시지처럼 오른쪽 아래에서 튀어 올라온다. */
 .preview-question {
   width: fit-content;
   margin: 0 0 14px auto;
@@ -223,6 +278,25 @@
   box-shadow: 0 8px 18px rgba(54, 31, 106, 0.18);
   font-size: 14px;
   font-weight: 650;
+  animation: question-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.8s both;
+}
+
+/* 점 세 개와 답변 카드가 같은 자리를 쓴다.
+   답변이 자리를 차지한 채 숨어 있으므로 레이아웃이 튀지 않는다. */
+.preview-reply {
+  position: relative;
+}
+
+.preview-thinking {
+  position: absolute;
+  top: 21px;
+  left: 20px;
+  animation: thinking 1.05s ease 1.15s both;
+}
+
+.preview-thinking .dots i {
+  background: #fff;
+  opacity: 0.85;
 }
 
 .preview-answer {
@@ -235,6 +309,36 @@
   background: #fff;
   color: var(--text);
   box-shadow: 0 14px 28px rgba(51, 34, 117, 0.18);
+  animation: answer-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 2s both;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(26px) rotate(-2deg) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) rotate(1.5deg) scale(1); }
+}
+
+/* translateZ 로 카드보다 앞에 띄운다. 카드가 기울면 이 값 차이만큼
+   더 크게 움직여서 시차가 생긴다. */
+@keyframes badge-pop {
+  from { opacity: 0; transform: rotate(16deg) translateZ(38px) scale(0.2); }
+  to { opacity: 1; transform: rotate(16deg) translateZ(38px) scale(1); }
+}
+
+@keyframes question-in {
+  from { opacity: 0; transform: translate(14px, 18px) translateZ(22px) scale(0.9); }
+  to { opacity: 1; transform: translateZ(22px); }
+}
+
+/* 떴다가 답변이 도착하면 사라진다. */
+@keyframes thinking {
+  0% { opacity: 0; }
+  14%, 74% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes answer-in {
+  from { opacity: 0; transform: translateY(10px) translateZ(14px) scale(0.97); }
+  to { opacity: 1; transform: translateZ(14px); }
 }
 
 .preview-spark {
@@ -264,6 +368,7 @@
   gap: 5px;
 }
 
+/* 분야가 하나씩 붙는다. 답변이 도착한 뒤 분류가 끝나는 순서다. */
 .preview-tags span {
   padding: 4px 8px;
   border-radius: var(--radius-pill);
@@ -271,6 +376,16 @@
   color: var(--text-soft);
   font-size: 10px;
   font-weight: 700;
+  animation: tag-in 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.preview-tags span:nth-child(1) { animation-delay: 2.3s; }
+.preview-tags span:nth-child(2) { animation-delay: 2.37s; }
+.preview-tags span:nth-child(3) { animation-delay: 2.44s; }
+
+@keyframes tag-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.85); }
+  to { opacity: 1; transform: none; }
 }
 
 .preview-tags span:nth-child(2) {
@@ -295,6 +410,14 @@
   background: #fff;
   box-shadow: var(--shadow);
   transform: rotate(-4deg);
+  animation: stat-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 2.2s both;
+}
+
+/* 숫자는 useCountUp 이 센다. 카드가 먼저 자리를 잡고 그 위에서 올라간다.
+   가장 앞(translateZ 48px)에 놓여서 제일 크게 시차를 받는다. */
+@keyframes stat-in {
+  from { opacity: 0; transform: translateY(14px) rotate(-8deg) translateZ(48px); }
+  to { opacity: 1; transform: translateY(0) rotate(-4deg) translateZ(48px); }
 }
 
 .preview-stat > span {
@@ -344,7 +467,25 @@
   backdrop-filter: blur(14px);
 }
 
+/* 활성 탭 배경을 혼자 맡는다. 위치와 너비는 TabNav 가 재서 넣는다.
+   .tabs-pill 의 padding 이 8px 이라 위아래를 그만큼 띄우면 탭에 맞는다. */
+.tab-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  border-radius: var(--radius-pill);
+  background: var(--text);
+  box-shadow: 0 7px 16px rgba(41, 33, 49, 0.18);
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .tab {
+  position: relative;
+  z-index: 1;                 /* 글자가 알약 위에 온다 */
   min-width: 112px;
   padding: 13px 19px;
   border: 0;
@@ -354,7 +495,9 @@
   font: inherit;
   font-size: 15px;
   font-weight: 650;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+  /* 색은 알약이 도착하는 속도에 맞춰 바뀐다. 160ms 로 두면 알약이 오기 전에
+     글자가 먼저 하얘져서 밝은 배경 위에 흰 글씨가 잠깐 보인다. */
+  transition: color 300ms ease, transform 160ms ease;
 }
 
 .tab:hover {
@@ -362,10 +505,9 @@
   transform: translateY(-1px);
 }
 
+/* 배경과 그림자는 .tab-indicator 가 그린다. 여기서는 글자색만 바꾼다. */
 .tab.is-active {
-  background: var(--text);
   color: #fff;
-  box-shadow: 0 7px 16px rgba(41, 33, 49, 0.18);
 }
 
 /* 레이아웃 */
@@ -541,6 +683,9 @@
 .attach-button:focus-visible,
 .bar-row:focus-visible,
 .examples button:focus-visible,
+.new-chat-button:focus-visible,
+.sources-toggle:focus-visible,
+.source-slide:focus-visible,
 .chip-file button:focus-visible,
 .policy-title a:focus-visible {
   outline: 3px solid rgba(113, 87, 232, 0.35);
@@ -663,6 +808,38 @@
   box-shadow: var(--shadow);
 }
 
+.chat-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.new-chat-button {
+  padding: 7px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.new-chat-button:hover:not(:disabled) {
+  background: var(--accent-wash);
+  color: var(--accent-dark);
+  transform: translateY(-1px);
+}
+
+.new-chat-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .chat-log {
   flex: 1;
   overflow-y: auto;
@@ -733,10 +910,15 @@
   font-size: 18px;
 }
 
-.examples button:hover {
+.examples button:hover:not(:disabled) {
   border-color: rgba(255, 93, 80, 0.3);
   box-shadow: 0 8px 20px rgba(255, 93, 80, 0.08);
   transform: translateY(-2px);
+}
+
+.examples button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .bubble-user {
@@ -861,11 +1043,213 @@
   margin-top: 19px;
 }
 
-.sources-title {
-  margin: 0 0 11px;
+.sources-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface-soft);
   color: var(--text-soft);
+  font: inherit;
   font-size: 14px;
   font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.sources-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.sources-chevron {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 19px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 180ms ease;
+}
+
+.sources-toggle[aria-expanded="true"] .sources-chevron {
+  transform: rotate(180deg);
+}
+
+.sources-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0.28s;
+}
+
+.sources-body.is-open {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.sources-body > div {
+  overflow: hidden;
+}
+
+.sources-slider {
+  position: relative;
+  padding: 11px 34px 5px;
+}
+
+.sources-carousel {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-color: color-mix(in srgb, var(--accent) 32%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.sources-carousel::-webkit-scrollbar {
+  height: 6px;
+}
+
+.sources-carousel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sources-carousel::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.sources-carousel .policy-cards {
+  display: grid;
+  grid-auto-columns: minmax(230px, 278px);
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  gap: 12px;
+  width: max-content;
+  padding: 2px 2px 10px;
+}
+
+.sources-carousel .policy-card {
+  height: 218px;
+  padding: 15px 16px 15px 20px;
+  border-color: rgba(222, 216, 226, 0.72);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 24px rgba(73, 49, 70, 0.06);
+  scroll-snap-align: start;
+  -webkit-backdrop-filter: blur(14px) saturate(115%);
+  backdrop-filter: blur(14px) saturate(115%);
+}
+
+.sources-carousel .policy-card::before {
+  width: 5px;
+  opacity: 0.86;
+}
+
+.sources-carousel .policy-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 15px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sources-carousel .policy-org {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sources-carousel .policy-summary {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sources-carousel .tags {
+  max-height: 48px;
+  margin-top: 9px;
+  overflow: hidden;
+}
+
+.sources-carousel .tag,
+.sources-carousel .deadline,
+.sources-carousel .closed-mark {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.sources-carousel .policy-period {
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.source-slide {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 50px;
+  padding: 0;
+  border: 1px solid rgba(222, 216, 226, 0.72);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--accent-dark);
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  box-shadow: 0 7px 20px rgba(73, 49, 70, 0.09);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.source-slide:hover {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 9px 24px rgba(73, 49, 70, 0.14);
+  transform: translateY(-50%) scale(1.04);
+}
+
+.source-slide:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.source-slide.is-prev { left: 0; }
+.source-slide.is-next { right: 0; }
+
+.sources-body.is-open .sources-carousel .policy-card {
+  animation: source-card-in 440ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.sources-body.is-open .sources-carousel .policy-card:nth-child(2) { animation-delay: 55ms; }
+.sources-body.is-open .sources-carousel .policy-card:nth-child(3) { animation-delay: 110ms; }
+.sources-body.is-open .sources-carousel .policy-card:nth-child(4) { animation-delay: 165ms; }
+.sources-body.is-open .sources-carousel .policy-card:nth-child(5) { animation-delay: 220ms; }
+
+@keyframes source-card-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateX(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateX(0) scale(1);
+  }
 }
 
 .thinking {
@@ -1486,8 +1870,16 @@
   .hero-copy h1 { font-size: clamp(30px, 8.8vw, 39px); }
   .hero-description { font-size: 15px; }
   .desktop-break { display: none; }
-  .hero-preview { width: calc(100% - 10px); max-width: calc(100vw - 44px); min-height: 220px; padding: 22px; border-radius: 30px; transform: none; }
+  /* 모바일은 카드를 기울이지도, 띄우지도 않는다. 애니메이션이 transform 을
+     덮어쓰므로 끝값이 none 인 전용 키프레임으로 통째로 바꾼다.
+     animation-name 만 바꾸면 duration·delay 가 두 개인 채로 남아 어긋난다. */
+  .hero-preview { width: calc(100% - 10px); max-width: calc(100vw - 44px); min-height: 220px; padding: 22px; border-radius: 30px; transform: none; animation: card-in-flat 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both; }
   .hero-preview::before { width: 58px; height: 58px; right: -14px; top: -18px; border-radius: 19px; }
+
+  @keyframes card-in-flat {
+    from { opacity: 0; transform: translateY(22px) scale(0.96); }
+    to { opacity: 1; transform: none; }
+  }
   .preview-answer { width: 92%; }
   .preview-stat { right: 0; bottom: -18px; }
 
@@ -1501,6 +1893,9 @@
 
   .chat { min-height: 620px; border-radius: 24px; }
   .chat-log { padding: 24px 19px; }
+  .sources-slider { padding-right: 28px; padding-left: 28px; }
+  .sources-carousel .policy-cards { grid-auto-columns: min(76vw, 255px); }
+  .source-slide { width: 29px; height: 46px; }
   .intro { padding: 14px 0; }
   .intro h2 { font-size: 27px; }
   .examples { grid-template-columns: 1fr; }
@@ -1540,6 +1935,15 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    /* 딜레이도 지운다. 이게 없으면 히어로가 2.4초 동안 비어 있다가
+       한 번에 나타난다. 움직임을 줄이려다 더 나쁜 경험이 된다. */
+    animation-delay: 0ms !important;
+  }
+
+  /* 점 세 개는 답변이 오면 사라지는 연출이다. 모션을 끄면 이 연출이
+     의미가 없고, 답변 카드와 겹쳐 보이므로 아예 감춘다. */
+  .preview-thinking {
+    display: none;
   }
 }
 
