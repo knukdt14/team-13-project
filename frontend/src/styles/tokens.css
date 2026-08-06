@@ -5,6 +5,7 @@
   --surface: #ffffff;
   --surface-soft: #f8f5f7;
   --surface-hover: #f1edf1;
+  --surface-glass: rgba(255, 255, 255, 0.84);
 
   --primary: #ff5d50;
   --primary-dark: #e9473c;
@@ -37,6 +38,9 @@
   --font-size: 16px;
   --tracking: -0.018em;
   --pad-card: 26px;
+  --motion-fast: 160ms;
+  --motion-normal: 420ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* 분야별 색은 정책을 훑어보기 위한 기능적 표시다. */
   --tone-job: #4269e1;

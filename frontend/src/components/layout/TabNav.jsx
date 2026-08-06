@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 
 const TABS = [
-  { to: '/', label: '정책 상담', end: true },
+  { to: '/', label: '홈', end: true },
+  { to: '/chat', label: '정책 상담' },
+  { to: '/apply', label: '바로 신청' },
   { to: '/map', label: '지역별 탐색' },
   { to: '/documents', label: '정책 목록' },
 ]
@@ -11,7 +13,7 @@ const TABS = [
 // 여기에 알약 배경까지 얹으면 배경이 컨테이너 전체로 늘어나므로,
 // .tabs-pill 을 한 겹 두고 그 위에 배경을 그린다.
 //
-// 검은 알약은 탭마다 따로 그리지 않는다. 하나짜리 .tab-indicator 를 두고
+// 활성 알약은 탭마다 따로 그리지 않는다. 하나짜리 .tab-indicator 를 두고
 // 활성 탭의 위치·너비로 옮긴다. 그래야 탭을 누를 때 사라졌다 나타나지 않고
 // 미끄러져 이동한다.
 export default function TabNav() {
@@ -36,6 +38,10 @@ export default function TabNav() {
   }, [pathname])
 
   return <nav className="tabs" aria-label="화면 선택"><div className="tabs-inner">
+    <Link className="topbar-brand" to="/" aria-label="청년정책도우미 홈">
+      <span className="topbar-brand-mark" aria-hidden="true"><i /><i /><i /></span>
+      <span>청년정책<strong>도우미</strong></span>
+    </Link>
     <div className="tabs-pill" ref={pillRef}>
       <span
         className="tab-indicator"
@@ -46,5 +52,6 @@ export default function TabNav() {
       />
       {TABS.map((tab) => <NavLink key={tab.to} to={tab.to} end={tab.end} className={({ isActive }) => `tab${isActive ? ' is-active' : ''}`}>{tab.label}</NavLink>)}
     </div>
+    <span className="topbar-balance" aria-hidden="true" />
   </div></nav>
 }

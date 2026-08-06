@@ -3,6 +3,7 @@ const POLICY = {
   categories: ['주거'], age_label: '19–34세', period_label: '상시 모집', days_left: null,
   status: '상시', jobs: ['제한없음'], schools: ['제한없음'], regions: ['전국'],
   summary: '청년의 주거비 부담을 덜어주는 정책이에요.', apply_url: '#',
+  application_url: '#', reference_url: '#policy', can_apply_directly: true,
 }
 
 const wait = (value) => new Promise((resolve) => setTimeout(() => resolve(value), 180))

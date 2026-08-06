@@ -19,6 +19,15 @@ class PolicyCard(BaseModel):
     regions: list[str] = Field(default_factory=list)
     summary: str = ""
     apply_url: str | None = None
+    application_url: str | None = Field(
+        default=None, description="기관의 신청 페이지 주소",
+    )
+    reference_url: str | None = Field(
+        default=None, description="정책 공고·상세 페이지 주소",
+    )
+    can_apply_directly: bool = Field(
+        default=False, description="신청 페이지 주소 제공 여부",
+    )
 
 
 class PolicyDetail(PolicyCard):

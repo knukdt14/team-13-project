@@ -18,6 +18,22 @@ from .condition_extractor import REGION_ALIASES, REGION_PREFIXES
 # 값으로 입력을 거르므로 두 곳이 어긋나면 "입력은 받는데 결과는 0건"이 된다.
 
 
+# 카테고리 탭이 보내는 값 → 데이터의 lclsfNm 값.
+#
+# 온통청년 데이터에 표기가 두 벌 섞여 있다. 수집 시기에 따라 분류 체계가
+# 바뀐 것으로 보인다. 둘 다 잡지 않으면 절반이 사라진다.
+#
+#   일자리 1,091 · 복지문화 369 · 금융･복지･문화 287 · 주거 282
+#   참여권리 228 · 교육 218 · 참여･기반 171 · 교육･직업훈련 159
+CATEGORY_ALIASES: dict[str, tuple[str, ...]] = {
+    "일자리": ("일자리",),
+    "주거": ("주거",),
+    "교육": ("교육", "교육･직업훈련"),
+    "복지": ("복지문화", "금융･복지･문화"),
+    "참여": ("참여권리", "참여･기반"),
+}
+
+
 def _as_int(value: Any) -> int | None:
     try:
         return int(value) if value not in (None, "") else None
@@ -145,19 +161,27 @@ class PolicyFilter:
 
     @staticmethod
     def _matches_category(policy: Mapping[str, Any], expected: Any) -> bool:
+        """대분류(lclsfNm)로만 판정한다.
+
+        전에는 mclsfNm 과 plcyKywdNm 까지 이어 붙인 문자열에서 별칭을 찾았다.
+        그래서 키워드가 '교육지원'이면 대분류가 일자리인 정책까지 교육 필터에
+        걸렸다. 실제로 `청년미래플러스`(일자리)와 `경계선지능청년지원`
+        (금융･복지･문화)이 교육 목록에 섞여 나왔다.
+
+        중분류·키워드는 검색어(`q`)가 훑는 자리다. 카테고리 탭은 사용자가
+        고른 대분류 하나만 보여줘야 한다.
+        """
         if not expected:
             return True
-        category_text = " ".join(
-            str(policy.get(field) or "") for field in ("lclsfNm", "mclsfNm", "plcyKywdNm")
-        )
-        expected_text = str(expected)
-        aliases = {
-            "교육": ("교육", "직업훈련"),
-            "일자리": ("일자리", "취업", "창업"),
-            "금융･복지･문화": ("금융", "복지", "문화"),
-            "참여･기반": ("참여", "권리", "기반"),
-        }.get(expected_text, (expected_text,))
-        return any(alias in category_text for alias in aliases)
+        # '일자리,교육'처럼 대분류가 여럿인 정책이 105건 있다. 그중 하나만
+        # 맞아도 해당 카테고리로 본다.
+        actual = {
+            part.strip()
+            for part in str(policy.get("lclsfNm") or "").split(",")
+            if part.strip()
+        }
+        aliases = CATEGORY_ALIASES.get(str(expected), (str(expected),))
+        return any(alias in actual for alias in aliases)
 
     @staticmethod
     def _matches_income(policy: Mapping[str, Any], income_bracket: Any) -> bool:
