@@ -8,6 +8,7 @@ export const PATHS = Object.freeze({
   ask: '/ask',
   askStream: '/ask/stream',
   documents: '/documents',
+  sessions: '/sessions',
 })
 
 export const getMeta = () => request(PATHS.meta)
@@ -22,6 +23,8 @@ export const ask = (body) => request(PATHS.ask, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 })
 export const streamUrl = (values) => `${API_BASE}${PATHS.askStream}?${queryString(values)}`
+export const getMessages = (sessionId) =>
+  request(`${PATHS.sessions}/${sessionId}/messages`)
 
 export async function uploadDocuments(sessionId, files) {
   const form = new FormData()

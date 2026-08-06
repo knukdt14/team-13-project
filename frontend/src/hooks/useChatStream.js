@@ -1,15 +1,48 @@
-import { useCallback, useRef, useState } from 'react'
-import { ask, streamUrl } from '../api/endpoints'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ask, getMessages, streamUrl } from '../api/endpoints'
 import { USE_MOCK } from '../api/client'
 
 export default function useChatStream({ sessionId, conditions, docIds }) {
   const [messages, setMessages] = useState([])
   const [pending, setPending] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(true)
   const sourceRef = useRef(null)
+
+  useEffect(() => {
+    let active = true
+    sourceRef.current?.close()
+    sourceRef.current = null
+    setPending(false)
+    setLoadingHistory(true)
+    setMessages([])
+
+    getMessages(sessionId)
+      .then((rows) => {
+        if (!active) return
+        const restored = (Array.isArray(rows) ? rows : []).map((row) => ({
+          role: row.role,
+          text: row.content,
+          sources: row.sources,
+        }))
+        setMessages(restored)
+      })
+      .catch(() => {
+        if (active) setMessages([])
+      })
+      .finally(() => {
+        if (active) setLoadingHistory(false)
+      })
+
+    return () => {
+      active = false
+      sourceRef.current?.close()
+      sourceRef.current = null
+    }
+  }, [sessionId])
 
   const send = useCallback(async (question) => {
     const text = question.trim()
-    if (!text || pending) return
+    if (!text || pending || loadingHistory) return
     setMessages((current) => [...current, { role: 'user', text }, { role: 'assistant', text: '', sources: [], streaming: true }])
     setPending(true)
     const profile = {
@@ -56,7 +89,7 @@ export default function useChatStream({ sessionId, conditions, docIds }) {
       source.close(); sourceRef.current = null; setPending(false)
       setMessages((current) => [...current.slice(0, -1), { role: 'error', text: '답변을 이어받지 못했어요. 잠시 뒤 다시 시도해주세요.' }])
     }
-  }, [conditions, docIds, pending, sessionId])
+  }, [conditions, docIds, loadingHistory, pending, sessionId])
 
-  return { messages, pending, send }
+  return { messages, pending, loadingHistory, send }
 }

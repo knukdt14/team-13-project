@@ -5,9 +5,15 @@ export default function useAttachments(sessionId) {
   const [items, setItems] = useState([])
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
-  const refresh = useCallback(() => getDocuments(sessionId).then(setItems), [sessionId])
-
-  useEffect(() => { refresh().catch(() => {}) }, [refresh])
+  useEffect(() => {
+    let active = true
+    setItems([])
+    setError(null)
+    getDocuments(sessionId)
+      .then((documents) => { if (active) setItems(documents) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [sessionId])
 
   const upload = useCallback(async (files) => {
     if (!files?.length) return

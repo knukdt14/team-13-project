@@ -20,6 +20,7 @@ export function respond(path, options = {}) {
   })
   if (path.startsWith('/documents') && options.method === 'POST') return wait({ items: [] })
   if (path.startsWith('/documents')) return wait([])
+  if (path.startsWith('/sessions/')) return wait([])
   if (path === '/ask') return wait({
     answer: '조건에 맞는 정책을 찾아봤어요.', sources: [{
       plcy_no: POLICY.plcy_no, title: POLICY.title, organization: POLICY.organization,
