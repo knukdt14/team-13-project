@@ -164,6 +164,7 @@ def search(body: SearchRequest, request: Request):
             filters=body.filters or None,
             include_closed=body.include_closed,
             mode=body.mode,
+            exclude_policy_ids=body.exclude_policy_ids,
         )
     except ValueError as error:
         return JSONResponse(

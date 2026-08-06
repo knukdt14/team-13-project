@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import faiss
 import numpy as np
@@ -69,6 +69,7 @@ class PolicyRetriever:
         filters: Mapping[str, Any] | None = None,
         include_closed: bool = False,
         mode: str = "hybrid",
+        exclude_policy_ids: Sequence[str] = (),
     ) -> dict[str, Any]:
         """조건 추출, 필터링, 검색 후 중복 없는 정책 Top-K를 반환한다.
 
@@ -107,6 +108,7 @@ class PolicyRetriever:
                 top_k,
                 include_closed,
                 mode,
+                exclude_policy_ids,
             )
         return {
             "question": question,
@@ -147,6 +149,7 @@ class PolicyRetriever:
         top_k: int,
         include_closed: bool,
         mode: str,
+        exclude_policy_ids: Sequence[str] = (),
     ) -> list[dict[str, Any]]:
         dense_indices, dense_values = self._dense_ranking(
             query_vector, candidate_indices
@@ -175,7 +178,13 @@ class PolicyRetriever:
             ranked = [(index, score / maximum) for index, score in fused]
 
         results: list[dict[str, Any]] = []
-        seen_policy_ids: set[str] = set()
+        # 이미 안내한 정책을 미리 넣어 두면 중복 제거 로직이 그대로 걸러 준다.
+        # "다른 거 없어?" 처럼 새로운 정책을 원할 때 쓴다.
+        seen_policy_ids: set[str] = {str(item) for item in exclude_policy_ids}
+        # 온통청년에 같은 정책이 정책번호만 다르게 두 번 등록된 경우가 있다.
+        # 이름+기관이 같은 285건(중복 147건)이 그렇다. 번호가 다르니 위의
+        # policy_id 검사로는 못 걸러지고, 사용자 눈에는 같은 것이 두 번 보인다.
+        seen_titles: set[tuple[str, str]] = set()
         for index, score in ranked:
             chunk = self.documents[int(index)]
             policy_id = str(chunk["policy_id"])
@@ -184,6 +193,13 @@ class PolicyRetriever:
             policy = self.policies.get(policy_id)
             if not policy or not self.policy_filter.matches(policy, conditions, include_closed):
                 continue
+            title_key = (
+                str(policy.get("plcyNm") or "").strip(),
+                str(policy.get("operInstCdNm") or policy.get("rgtrInstCdNm") or "").strip(),
+            )
+            if title_key[0] and title_key in seen_titles:
+                continue
+            seen_titles.add(title_key)
             seen_policy_ids.add(policy_id)
             results.append(
                 self._format_result(

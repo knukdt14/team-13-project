@@ -129,6 +129,7 @@ class AIClient:
         filters: Mapping[str, Any] | None = None,
         include_closed: bool = False,
         mode: str = "hybrid",
+        exclude_policy_ids: Sequence[str] = (),
     ) -> dict[str, Any]:
         payload = {
             "question": question,
@@ -136,6 +137,7 @@ class AIClient:
             "filters": dict(filters) if filters else None,
             "include_closed": include_closed,
             "mode": mode,
+            "exclude_policy_ids": [str(item) for item in exclude_policy_ids],
         }
         try:
             response = self._client.post("/search", json=payload)

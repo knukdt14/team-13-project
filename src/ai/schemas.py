@@ -23,6 +23,10 @@ class SearchRequest(BaseModel):
     filters: dict[str, Any] | None = None
     include_closed: bool = False
     mode: str = Field(default="hybrid", pattern="^(vector|bm25|hybrid)$")
+    exclude_policy_ids: list[str] = Field(
+        default_factory=list,
+        description="결과에서 뺄 정책 번호. 이미 안내한 정책을 다시 보여주지 않을 때 쓴다.",
+    )
 
 
 class SearchResponse(BaseModel):
@@ -68,6 +72,9 @@ class InterpretResponse(BaseModel):
 
     intent: str = "search"
     standalone_question: str = ""
+    # "다른 거 없어?" 처럼 앞서 안내한 것 말고 더 보여 달라는 요청인가.
+    # 이 필드를 빠뜨리면 응답 모델이 값을 잘라 내서 백엔드가 영영 알 수 없다.
+    wants_more: bool = False
     policy_ids: list[str] = Field(default_factory=list)
     conditions: dict[str, Any] = Field(default_factory=dict)
     ok: bool = False

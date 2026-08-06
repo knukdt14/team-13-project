@@ -62,6 +62,32 @@ class Repository:
                 return [Source.model_validate(item) for item in items]
         return []
 
+    def shown_policy_ids(self, session_id: str) -> list[str]:
+        """이번 대화에서 이미 안내한 모든 정책 번호.
+
+        "다른 거 없어?" 라고 물었을 때 검색 결과에서 빼기 위해 쓴다.
+        recent_sources 는 직전 한 번만 보지만, 여기서는 처음부터 전부 모은다.
+        그래야 "다른 거"를 여러 번 물어도 계속 새로운 정책이 나온다.
+        """
+        rows = self.database.execute(
+            "SELECT sources_json FROM messages "
+            "WHERE session_id=? AND role='assistant' ORDER BY id",
+            (session_id,),
+        ).fetchall()
+        seen: list[str] = []
+        known: set[str] = set()
+        for row in rows:
+            try:
+                items = json.loads(row["sources_json"] or "[]")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            for item in items:
+                policy_id = str(item.get("plcy_no") or "")
+                if policy_id and policy_id not in known:
+                    known.add(policy_id)
+                    seen.append(policy_id)
+        return seen
+
     def add_message(
         self, session_id: str, role: str, content: str, sources: list[Source] | None = None
     ) -> int:
