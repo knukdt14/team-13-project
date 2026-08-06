@@ -15,6 +15,14 @@ with open(os.path.join(DATA_DIR, "code_definitions.json"), encoding="utf-8") as 
 
 FILTER_FIELDS = [
     "plcyNo", "plcyNm", "plcyKywdNm", "lclsfNm", "mclsfNm",
+    # 서술형 본문. 예전에는 rag_docs 에만 담고 여기서는 버렸는데, 그 탓에
+    # 백엔드가 읽는 policies_structured.json 에 본문이 하나도 없었다.
+    #   - 정책 카드의 summary 가 2,698건 전부 빈 문자열
+    #   - 목록 검색이 제목·키워드만 훑음 ("월세"가 11건만 나옴)
+    #   - 후속 질문용 policy_to_generator_payload 가 빈 본문을 LLM 에 넘김
+    #   - 제출서류를 화면에 보여줄 수 없음 (실제 서류명이 적힌 정책 506건)
+    "plcyExplnCn", "plcySprtCn", "plcyAplyMthdCn",
+    "sbmsnDcmntCn", "addAplyQlfcCndCn", "ptcpPrpTrgtCn",
     "sprtTrgtMinAge", "sprtTrgtMaxAge", "sprtTrgtAgeLmtYn",
     "mrgSttsCd", "earnCndSeCd", "earnMinAmt", "earnMaxAmt", "earnEtcCn",
     "zipCd", "sbizCd", "jobCd", "schoolCd", "plcyMajorCd",
@@ -94,7 +102,13 @@ def decode_code(field, code):
 
 
 # 코드/URL/날짜성 필드가 아니라 자유서술형 텍스트라 clean_text()로 장식기호까지 정리해야 하는 필드
-FREE_TEXT_FIELDS = {"bizPrdEtcCn", "earnEtcCn"}
+# 관공서 원문에는 ○ ▶ ※ 같은 장식 불릿과 이모지가 섞여 있다. 그대로 두면
+# 카드에 그 기호가 노출되고 LLM 입력에도 노이즈로 들어간다.
+FREE_TEXT_FIELDS = {
+    "bizPrdEtcCn", "earnEtcCn",
+    "plcyExplnCn", "plcySprtCn", "plcyAplyMthdCn",
+    "sbmsnDcmntCn", "addAplyQlfcCndCn", "ptcpPrpTrgtCn",
+}
 
 
 def clean_structured_field(field, value):
