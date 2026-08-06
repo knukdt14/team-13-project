@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from typing import Any
 
 from src.backend.schemas import Message, Source
 
@@ -17,6 +18,49 @@ class Repository:
         session_id = session_id or uuid.uuid4().hex
         self.database.execute("INSERT OR IGNORE INTO sessions(id) VALUES (?)", (session_id,))
         return session_id
+
+    # ------------------------------------------------------- 세션에 쌓이는 조건
+
+    def session_profile(self, session_id: str) -> dict[str, Any]:
+        """대화 중 알게 된 사용자 조건. 요청마다 새로 받지 않고 누적한다."""
+        row = self.database.execute(
+            "SELECT profile_json FROM sessions WHERE id=?", (session_id,)
+        ).fetchone()
+        if row is None:
+            return {}
+        try:
+            stored = json.loads(row["profile_json"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return stored if isinstance(stored, dict) else {}
+
+    def save_session_profile(self, session_id: str, profile: dict[str, Any]) -> None:
+        self.database.execute(
+            "UPDATE sessions SET profile_json=? WHERE id=?",
+            (json.dumps(profile, ensure_ascii=False), session_id),
+        )
+
+    # ------------------------------------------------- 직전에 안내한 정책 목록
+
+    def recent_sources(self, session_id: str) -> list[Source]:
+        """가장 최근 답변에서 안내한 정책들.
+
+        "3번 정책", "그 정책" 같은 표현을 실제 정책 ID 로 잇는 재료가 된다.
+        정책을 안내하지 않은 답변(일반 대화)은 건너뛰고 거슬러 올라간다.
+        """
+        rows = self.database.execute(
+            "SELECT sources_json FROM messages "
+            "WHERE session_id=? AND role='assistant' ORDER BY id DESC LIMIT 5",
+            (session_id,),
+        ).fetchall()
+        for row in rows:
+            try:
+                items = json.loads(row["sources_json"] or "[]")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if items:
+                return [Source.model_validate(item) for item in items]
+        return []
 
     def add_message(
         self, session_id: str, role: str, content: str, sources: list[Source] | None = None

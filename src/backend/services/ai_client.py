@@ -72,6 +72,54 @@ class AIClient:
                 f"답변 생성기가 준비되지 않았어요. {detail}".strip()
             )
 
+    # ------------------------------------------------------------------ 해석
+
+    def interpret(
+        self,
+        question: str,
+        history: Sequence[Mapping[str, str]] = (),
+        recent_policies: Sequence[Mapping[str, Any]] = (),
+        profile: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """검색 전에 입력의 성격을 묻는다.
+
+        **실패해도 예외를 던지지 않는다.** ``ok=False`` 를 돌려주면 호출하는
+        쪽이 기존 동작(무조건 검색)으로 되돌아간다. 새로 넣은 이 단계 때문에
+        챗봇이 통째로 멈추는 일은 없어야 하기 때문이다.
+        """
+        payload = {
+            "question": question,
+            "history": [dict(item) for item in history],
+            "recent_policies": [dict(item) for item in recent_policies],
+            "profile": dict(profile or {}),
+        }
+        try:
+            response = self._client.post(
+                "/interpret",
+                json=payload,
+                timeout=httpx.Timeout(connect=5.0, read=30.0, write=15.0, pool=5.0),
+            )
+            if response.status_code >= 400:
+                return {
+                    "ok": False,
+                    "intent": "search",
+                    "standalone_question": question,
+                    "policy_ids": [],
+                    "conditions": {},
+                    "error": self._detail(response, "의도 해석에 실패했어요."),
+                }
+            return dict(response.json())
+        except Exception as error:  # noqa: BLE001
+            logger.warning("의도 해석 요청 실패(검색으로 진행): %s", error)
+            return {
+                "ok": False,
+                "intent": "search",
+                "standalone_question": question,
+                "policy_ids": [],
+                "conditions": {},
+                "error": str(error),
+            }
+
     # ------------------------------------------------------------------ 검색
 
     def search(

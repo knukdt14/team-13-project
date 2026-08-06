@@ -57,21 +57,16 @@ def ask_stream(
     )
 
     started = time.perf_counter()
-    tokens, result, actual_session_id, used_attachments, generated = ChatService(
-        repository, ai
-    ).stream(request)
+    service = ChatService(repository, ai)
+    tokens, prepared = service.stream(request)
 
     def events():
         answer_parts: list[str] = []
         for token in tokens:
             answer_parts.append(token)
             yield f"event: token\ndata: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-        payload = AskResponse(
-            answer="".join(answer_parts), sources=result.sources,
-            matched_policies=result.matched_policies, session_id=actual_session_id,
-            elapsed_ms=int((time.perf_counter() - started) * 1000), matched=result.matched,
-            total=result.total, relevant=result.relevant or used_attachments,
-            generated=generated, used_attachments=used_attachments,
+        payload = service.build_response(
+            prepared, "".join(answer_parts), int((time.perf_counter() - started) * 1000)
         )
         data = json.dumps(payload.model_dump(mode="json"), ensure_ascii=False)
         yield f"event: done\ndata: {data}\n\n"
