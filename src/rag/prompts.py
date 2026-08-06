@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
 SYSTEM_PROMPT = """당신은 대한민국 청년정책 안내를 돕는 한국어 챗봇입니다.
 
 먼저 사용자의 현재 입력 내용이 청년정책과 관련 있는지 판단하세요.
@@ -62,67 +60,7 @@ ATTACHMENT_MODE_HINT = """
 - 첨부 문서 요약에는 위 [정책 추천]의 목록 형식을 억지로 맞추지 말고, 질문에 맞는 자연스러운 문장으로 답하세요.
 """
 
-FOLLOW_UP_HINTS = (
-    "그중",
-    "그 정책",
-    "이 정책",
-    "첫 번째",
-    "두 번째",
-    "세 번째",
-    "네 번째",
-    "다섯 번째",
-    "번 정책",
-    "신청 방법",
-    "신청방법",
-    "어떻게 신청",
-    "언제까지",
-    "자세히",
-    "링크",
-)
-
-GREETING_INPUTS = frozenset(
-    {
-        "안녕",
-        "안녕하세요",
-        "반가워",
-        "반갑습니다",
-        "하이",
-        "hello",
-        "hi",
-        "고마워",
-        "고맙습니다",
-        "감사합니다",
-    }
-)
-
-PERSONALIZED_REQUEST_HINTS = (
-    "나에게 맞는",
-    "내게 맞는",
-    "나한테 맞는",
-    "나에게 가장 관련",
-    "내게 가장 관련",
-    "나한테 가장 관련",
-)
-
-
-def is_greeting(question: str) -> bool:
-    """검색 없이 답할 수 있는 짧은 인사인지 판별한다."""
-    normalized = re.sub(r"[\s!?.~,]+", "", question).lower()
-    return normalized in GREETING_INPUTS
-
-
-def is_personalized_request(question: str) -> bool:
-    """사용자 조건을 전제로 한 맞춤 정책 요청인지 판별한다."""
-    compact = " ".join(question.split())
-    return any(hint in compact for hint in PERSONALIZED_REQUEST_HINTS)
-
-
 __all__ = [
     "SYSTEM_PROMPT",
-    "ATTACHMENT_MODE_HINT",
-    "FOLLOW_UP_HINTS",
-    "GREETING_INPUTS",
-    "PERSONALIZED_REQUEST_HINTS",
-    "is_greeting",
-    "is_personalized_request",
+    "ATTACHMENT_MODE_HINT"
 ]

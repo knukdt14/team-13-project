@@ -45,11 +45,19 @@ from openai import OpenAIError
 
 if __package__:
     from ..generator import SolarGenerator
-    from ..prompts import FOLLOW_UP_HINTS, is_greeting, is_personalized_request
+    from ..interpreter import (
+        INTENT_CHAT,
+        INTENT_FOLLOW_UP,
+        ConversationInterpreter,
+    )
     from ..retriever import PolicyRetriever
 else:
     from src.rag.generator import SolarGenerator
-    from src.rag.prompts import FOLLOW_UP_HINTS, is_greeting, is_personalized_request
+    from src.rag.interpreter import (
+        INTENT_CHAT,
+        INTENT_FOLLOW_UP,
+        ConversationInterpreter,
+    )
     from src.rag.retriever import PolicyRetriever
 
 
@@ -62,35 +70,42 @@ class TerminalPolicyChatbot:
     ) -> None:
         self.retriever = PolicyRetriever()
         self.generator = SolarGenerator()
+        self.interpreter = ConversationInterpreter.from_generator(self.generator)
         self.top_k = top_k
         self.include_closed = include_closed
         self.mode = mode
         self.history: list[dict[str, str]] = []
-        self.previous_question: str | None = None
+        self.recent_policies: list[dict[str, Any]] = []
+        self.profile: dict[str, Any] = {}
 
     def chat(self, question: str) -> None:
-        if is_greeting(question):
-            answer = "안녕하세요. 궁금한 청년정책이나 현재 조건을 말씀해 주세요."
-            print(f"\nSolar: {answer}\n")
-            self._remember(question, answer)
+        interpretation = self.interpreter.interpret(
+            question,
+            history=self.history,
+            recent_policies=self.recent_policies,
+            profile=self.profile,
+        )
+        if interpretation.ok:
+            self.profile.update(interpretation.conditions)
+
+        if interpretation.ok and interpretation.intent == INTENT_CHAT:
+            self._generate_answer(question, self.profile, [])
             return
 
-        explicit_conditions, _ = self.retriever.extractor.extract(question)
-        if is_personalized_request(question) and not explicit_conditions.to_dict():
-            answer = (
-                "맞춤 정책을 찾으려면 나이, 거주지역, 취업상태, 학력을 알려주세요. "
-                "웹에서는 '내 조건'에 입력한 정보가 자동으로 검색에 반영됩니다."
-            )
-            print("\n[검색 조건] 추출된 조건 없음")
-            print("[검색 결과] 0건")
-            print(f"\nSolar: {answer}\n")
-            self._remember(question, answer)
-            return
+        if interpretation.ok and interpretation.intent == INTENT_FOLLOW_UP:
+            policies = self._select_recent_policies(interpretation.policy_ids)
+            if policies:
+                self._generate_answer(question, self.profile, policies)
+                self.recent_policies = policies
+                return
 
-        retrieval_question = self._make_retrieval_question(question)
+        retrieval_question = (
+            interpretation.standalone_question if interpretation.ok else question
+        )
         result = self.retriever.search(
             retrieval_question,
             top_k=self.top_k,
+            filters=self.profile or None,
             include_closed=self.include_closed,
             mode=self.mode,
         )
@@ -99,21 +114,35 @@ class TerminalPolicyChatbot:
         policies = result["policies"]
         if not policies:
             if self.include_closed:
-                print("\nSolar: 조건에 맞는 정책을 찾지 못했습니다. 조건을 조금 넓혀 질문해 주세요.\n")
+                answer = "조건에 맞는 정책을 찾지 못했습니다. 조건을 조금 넓혀 질문해 주세요."
             else:
-                print(
-                    "\nSolar: 현재 접수 중인 정책을 찾지 못했습니다. "
-                    "`/마감포함`을 입력하면 마감 정책도 함께 검색합니다.\n"
+                answer = (
+                    "현재 접수 중인 정책을 찾지 못했습니다. "
+                    "`/마감포함`을 입력하면 마감 정책도 함께 검색합니다."
                 )
-            self.previous_question = question
+            print(f"\nSolar: {answer}\n")
+            self._remember(question, answer)
             return
 
+        self._generate_answer(
+            question,
+            result["extracted_conditions"],
+            policies,
+        )
+        self.recent_policies = policies
+
+    def _generate_answer(
+        self,
+        question: str,
+        conditions: dict[str, Any],
+        policies: list[dict[str, Any]],
+    ) -> None:
         print("\nSolar: ", end="", flush=True)
         answer_parts: list[str] = []
         try:
             stream = self.generator.stream_answer(
                 question,
-                result["extracted_conditions"],
+                conditions,
                 policies,
                 self.history,
             )
@@ -126,15 +155,17 @@ class TerminalPolicyChatbot:
 
         answer = "".join(answer_parts)
         print("\n")
-        self._print_sources(policies)
+        if policies:
+            self._print_sources(policies)
         self._remember(question, answer)
-        self.previous_question = question
 
-    def _make_retrieval_question(self, question: str) -> str:
-        is_follow_up = any(hint in question for hint in FOLLOW_UP_HINTS)
-        if self.previous_question and (is_follow_up or len(question.strip()) <= 15):
-            return f"{self.previous_question}\n후속 질문: {question}"
-        return question
+    def _select_recent_policies(self, policy_ids: list[str]) -> list[dict[str, Any]]:
+        selected = set(policy_ids)
+        return [
+            policy
+            for policy in self.recent_policies
+            if str(policy.get("policy_id") or "") in selected
+        ]
 
     @staticmethod
     def _print_search_summary(result: dict[str, Any]) -> None:
@@ -160,7 +191,8 @@ class TerminalPolicyChatbot:
 
     def reset(self) -> None:
         self.history.clear()
-        self.previous_question = None
+        self.recent_policies.clear()
+        self.profile.clear()
 
 
 def print_help() -> None:

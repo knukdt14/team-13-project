@@ -106,6 +106,8 @@ src\rag\cli\run_chatbot.cmd
 
 현재 위치가 `src\rag\cli` 폴더라면 파일을 직접 실행해도 된다. 다른 Python
 환경에서 실행한 경우에도 `.venv-gpu`가 있으면 GPU 환경으로 자동 전환된다.
+터미널에서도 웹과 같은 `ConversationInterpreter`를 사용하므로 일반 대화,
+새 정책 검색, 직전에 안내한 정책에 대한 후속 질문을 구분한다.
 
 ```cmd
 python terminal_chatbot.py
