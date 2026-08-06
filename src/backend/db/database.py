@@ -11,7 +11,8 @@ from src.backend.config import settings
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    profile_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,6 +64,28 @@ def connection() -> Iterator[sqlite3.Connection]:
         database.close()
 
 
+# 이미 만들어진 app.db 에 칸을 덧붙이기 위한 목록.
+# (테이블, 컬럼, ALTER 문) 이며 컬럼이 없을 때만 실행한다.
+# 팀원이 각자 app.db 를 지우지 않아도 되도록 하기 위한 장치다.
+MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    (
+        "sessions",
+        "profile_json",
+        "ALTER TABLE sessions ADD COLUMN profile_json TEXT NOT NULL DEFAULT '{}'",
+    ),
+)
+
+
+def _apply_migrations(database: sqlite3.Connection) -> None:
+    for table, column, statement in MIGRATIONS:
+        columns = {
+            row["name"] for row in database.execute(f"PRAGMA table_info({table})")  # noqa: S608
+        }
+        if column not in columns:
+            database.execute(statement)
+
+
 def initialize_database() -> None:
     with connection() as database:
         database.executescript(SCHEMA)
+        _apply_migrations(database)

@@ -53,6 +53,10 @@ class AnswerResult(BaseModel):
     relevant: bool = False
     generated: bool = False
     used_attachments: bool = False
+    # 이번 입력을 무엇으로 판단했는지. chat / search / follow_up.
+    # interpreted 가 False 면 의도 해석에 실패해 기존 방식(무조건 검색)으로 처리한 것이다.
+    intent: str = "search"
+    interpreted: bool = False
 
 
 class AskResponse(AnswerResult):

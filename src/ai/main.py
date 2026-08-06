@@ -5,10 +5,11 @@
 때문이다. 그래서 무거운 객체는 이 프로세스에만 올리고 HTTP 창구 세 개로
 노출한다.
 
-    GET  /health    준비 상태 (백엔드 기동 순서 판정에 사용)
-    POST /search    PolicyRetriever.search
-    POST /generate  SolarGenerator.stream_answer (NDJSON 스트리밍)
-    POST /ocr       이미지에서 텍스트 추출 (F4·P3)
+    GET  /health     준비 상태 (백엔드 기동 순서 판정에 사용)
+    POST /interpret  대화 의도 해석 (검색 전 단계)
+    POST /search     PolicyRetriever.search
+    POST /generate   SolarGenerator.stream_answer (NDJSON 스트리밍)
+    POST /ocr        이미지에서 텍스트 추출 (F4·P3)
 
 OCR도 여기 있는 이유는 torch 때문이다. easyocr 은 torch 를 끌고 오는데,
 이 컨테이너에는 임베딩 모델용 torch 가 이미 있다. 백엔드에 넣으면 같은 2GB
@@ -32,6 +33,8 @@ from src.ai.schemas import (
     AIHealthResponse,
     ERROR_KEY,
     GenerateRequest,
+    InterpretRequest,
+    InterpretResponse,
     OcrResponse,
     SearchRequest,
     SearchResponse,
@@ -67,8 +70,13 @@ def _load_retriever(application: FastAPI) -> None:
 def _load_generator(application: FastAPI) -> None:
     try:
         from src.rag.generator import SolarGenerator
+        from src.rag.interpreter import ConversationInterpreter
 
         application.state.generator = SolarGenerator()
+        # 의도 해석기는 생성기와 같은 Solar 클라이언트를 재사용한다.
+        application.state.interpreter = ConversationInterpreter.from_generator(
+            application.state.generator
+        )
         logger.info("SolarGenerator 준비 완료 · model=%s", application.state.generator.model)
     except Exception as error:  # noqa: BLE001
         # 키가 없어도 검색은 되어야 하므로 기동 자체는 막지 않는다.
@@ -80,6 +88,7 @@ def _load_generator(application: FastAPI) -> None:
 async def lifespan(application: FastAPI):
     application.state.retriever = None
     application.state.generator = None
+    application.state.interpreter = None
     application.state.retriever_error = None
     application.state.generator_error = None
     _load_retriever(application)
@@ -113,6 +122,30 @@ def health(request: Request) -> AIHealthResponse:
         retriever_error=request.app.state.retriever_error,
         generator_error=request.app.state.generator_error,
     )
+
+
+@app.post("/interpret", response_model=InterpretResponse, summary="대화 의도 해석")
+def interpret(body: InterpretRequest, request: Request) -> InterpretResponse:
+    """검색을 돌리기 전에 입력의 성격을 판단한다.
+
+    실패해도 503 을 내지 않고 ``ok=False`` 로 응답한다. 백엔드가 그때
+    기존 동작(무조건 검색)으로 되돌아가면 서비스는 그대로 굴러간다.
+    """
+    interpreter = request.app.state.interpreter
+    if interpreter is None:
+        return InterpretResponse(
+            standalone_question=body.question,
+            ok=False,
+            error=request.app.state.generator_error or "의도 해석기가 준비되지 않았어요.",
+        )
+    result = interpreter.interpret(
+        body.question, body.history, body.recent_policies, body.profile
+    )
+    logger.info(
+        "의도 해석 · intent=%s ok=%s ids=%s conditions=%s",
+        result.intent, result.ok, result.policy_ids, result.conditions,
+    )
+    return InterpretResponse(**result.to_dict())
 
 
 @app.post("/search", response_model=SearchResponse, summary="정책 하이브리드 검색")

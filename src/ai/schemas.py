@@ -46,6 +46,34 @@ class GenerateRequest(BaseModel):
     history: list[dict[str, str]] = Field(default_factory=list)
 
 
+class InterpretRequest(BaseModel):
+    """검색 전에 "이 입력이 무엇인지" 를 묻는 요청.
+
+    정책은 제목만 보낸다. 본문까지 보내면 해석이 느려지고, 해석에는 제목이면
+    충분하다.
+    """
+
+    question: str = Field(min_length=1, max_length=2000)
+    history: list[dict[str, str]] = Field(default_factory=list)
+    recent_policies: list[dict[str, Any]] = Field(default_factory=list)
+    profile: dict[str, Any] = Field(default_factory=dict)
+
+
+class InterpretResponse(BaseModel):
+    """해석 결과.
+
+    ``ok=False`` 면 해석에 실패한 것이다. 백엔드는 이때 기존 동작(무조건 검색)
+    으로 되돌아간다. 그래서 이 엔드포인트는 실패해도 200 으로 응답한다.
+    """
+
+    intent: str = "search"
+    standalone_question: str = ""
+    policy_ids: list[str] = Field(default_factory=list)
+    conditions: dict[str, Any] = Field(default_factory=dict)
+    ok: bool = False
+    error: str = ""
+
+
 class OcrResponse(BaseModel):
     """포스터·현수막 사진에서 뽑아낸 텍스트."""
 
@@ -75,6 +103,8 @@ __all__ = [
     "AIHealthResponse",
     "ERROR_KEY",
     "GenerateRequest",
+    "InterpretRequest",
+    "InterpretResponse",
     "OcrResponse",
     "SearchRequest",
     "SearchResponse",

@@ -131,6 +131,39 @@ def policy_to_card(policy: Mapping[str, Any]) -> PolicyCard:
     )
 
 
+def policy_to_generator_payload(policy: Mapping[str, Any]) -> dict[str, Any]:
+    """구조화 정책 하나를 답변 생성기가 읽는 형태로 바꾼다.
+
+    후속 질문("3번 정책 신청 방법")에서는 다시 검색하지 않고 지목된 정책만
+    생성기에 넘긴다. 그때 ``PolicyRetriever.search`` 가 돌려주던 것과 같은
+    모양을 백엔드가 직접 만들어야 하므로 이 함수가 필요하다.
+    """
+    body = "\n".join(
+        str(policy.get(field) or "")
+        for field in ("plcyExplnCn", "plcySprtCn", "plcyAplyMthdCn", "aplyBnfLmtCn")
+        if policy.get(field)
+    )
+    remaining = _days_left(policy)
+    return {
+        "policy_id": str(policy.get("plcyNo") or ""),
+        "policy_name": str(policy.get("plcyNm") or "이름 없는 정책"),
+        "score": 1.0,
+        "matched_text": body,
+        "metadata": {
+            "application_start": policy.get("aplyStartYmd"),
+            "application_end": policy.get("aplyEndYmd"),
+            "application_type": policy.get("aplyPrdSeCdNm"),
+            "is_open": remaining is None or remaining >= 0,
+            "organization": policy.get("operInstCdNm") or policy.get("rgtrInstCdNm"),
+            "large_category": policy.get("lclsfNm"),
+            "income_condition": policy.get("earnCndSeCdNm"),
+            "income_details": policy.get("earnEtcCn"),
+            "application_url": policy.get("aplyUrlAddr"),
+            "reference_url": policy.get("refUrlAddr1") or policy.get("refUrlAddr2"),
+        },
+    }
+
+
 class PolicyService:
     def __init__(self) -> None:
         self.filter = PolicyFilter()

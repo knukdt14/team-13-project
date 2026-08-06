@@ -1,19 +1,29 @@
 """AI 서비스 어댑터 및 대화 저장 오케스트레이션.
 
-컨테이너 분리 후, 이 서비스가 AI 컨테이너에 HTTP로 물어보는 것은 두 가지뿐이다.
+컨테이너 분리 후, 이 서비스가 AI 컨테이너에 HTTP로 물어보는 것은 세 가지다.
 
-    1) 정책 검색   ai.search(...)          FAISS 인덱스와 임베딩 모델이 필요
-    2) 답변 생성   ai.stream_generate(...) Solar API 호출이 필요
+    1) 의도 해석   ai.interpret(...)       검색 전에 "이 입력이 무엇인지" 판단
+    2) 정책 검색   ai.search(...)          FAISS 인덱스와 임베딩 모델이 필요
+    3) 답변 생성   ai.stream_generate(...) Solar API 호출이 필요
 
 정책 원본 조회와 자격 판정은 모델이 필요 없는 순수 계산이므로 백엔드가 직접
 한다(``policy_service.policy_records`` · ``PolicyFilter``). 덕분에 정책 목록·
 지도·자격 진단은 AI 컨테이너가 죽어 있어도 정상 동작한다.
+
+의도에 따라 처리가 세 갈래로 갈린다.
+
+    chat       검색하지 않고 대화 이력만으로 답한다.
+    search     독립 질문과 누적 조건으로 검색한 뒤 답한다.
+    follow_up  검색하지 않고 지목된 정책만 꺼내 답한다.
+
+해석에 실패하면(``ok=False``) 전부 search 로 처리한다. 새로 넣은 해석 단계가
+고장 나도 예전과 같은 동작으로 되돌아가게 하기 위해서다.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from time import perf_counter
 from typing import Any
@@ -34,15 +44,36 @@ from src.backend.services.policy_service import (
     is_nationwide,
     policy_records,
     policy_to_card,
+    policy_to_generator_payload,
     profile_filters,
 )
 from src.rag.eligibility import PolicyFilter
+
+INTENT_CHAT = "chat"
+INTENT_SEARCH = "search"
+INTENT_FOLLOW_UP = "follow_up"
+
+# 프로필로 저장할 수 있는 값. 해석기가 엉뚱한 키를 돌려줘도 여기서 걸러진다.
+PROFILE_KEYS = ("age", "region", "employment", "education", "income_bracket")
+
+HISTORY_LIMIT = 6
 
 
 @lru_cache(maxsize=1)
 def _policy_filter() -> PolicyFilter:
     """모델이 필요 없는 순수 판정기. 백엔드 프로세스에서 직접 쓴다."""
     return PolicyFilter()
+
+
+def _merge_profiles(*profiles: dict[str, Any] | None) -> dict[str, Any]:
+    """뒤에 오는 값이 이긴다. 빈 값은 덮어쓰지 않는다."""
+    merged: dict[str, Any] = {}
+    for profile in profiles:
+        for key in PROFILE_KEYS:
+            value = (profile or {}).get(key)
+            if value is not None and value != "":
+                merged[key] = value
+    return merged
 
 
 @dataclass
@@ -54,10 +85,19 @@ class PreparedAnswer:
     history: list[dict[str, str]]
     session_id: str
     attachment_text: str
+    intent: str = INTENT_SEARCH
+    interpreted: bool = False
+    standalone_question: str = ""
+    profile: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def is_chat(self) -> bool:
+        return self.intent == INTENT_CHAT
 
     @property
     def has_evidence(self) -> bool:
-        return bool(self.policies or self.attachment_text)
+        # 일반 대화는 근거 자료 없이도 답해야 한다.
+        return self.is_chat or bool(self.policies or self.attachment_text)
 
 
 class ChatService:
@@ -91,8 +131,40 @@ class ChatService:
             policy=policy_to_card(raw_policy) if raw_policy else None,
         )
 
-    def _search(self, request: AskRequest) -> tuple[SearchResult, list[dict[str, Any]], dict[str, Any]]:
-        profile = request.profile or UserProfile()
+    def _empty_result(self) -> SearchResult:
+        return SearchResult(total=len(policy_records()))
+
+    def _follow_up(
+        self, policy_ids: list[str]
+    ) -> tuple[SearchResult, list[dict[str, Any]]]:
+        """지목된 정책만 꺼낸다. 검색을 다시 돌리지 않는 것이 핵심이다."""
+        records = policy_records()
+        policies = [
+            policy_to_generator_payload(records[policy_id])
+            for policy_id in policy_ids
+            if policy_id in records
+        ]
+        sources = [
+            self._source(item, records.get(str(item.get("policy_id"))))
+            for item in policies
+        ]
+        return (
+            SearchResult(
+                sources=sources,
+                matched_policies=[source.plcy_no for source in sources],
+                matched=len(policies),
+                total=len(records),
+                relevant=bool(policies),
+            ),
+            policies,
+        )
+
+    def _search(
+        self,
+        request: AskRequest,
+        profile: UserProfile,
+        question: str,
+    ) -> tuple[SearchResult, list[dict[str, Any]], dict[str, Any]]:
         filters = profile_filters(profile)
         # 정책 원본은 백엔드도 갖고 있다. AI 응답에는 policy_id 만 오므로
         # 카드 변환·전국 판정은 이 로컬 사전으로 처리한다.
@@ -107,7 +179,7 @@ class ChatService:
             search_top_k = max(request.top_k * 5, 25)
 
         raw = self._require_ai().search(
-            request.question,
+            question,
             top_k=search_top_k,
             filters=filters or None,
             include_closed=request.include_closed,
@@ -141,9 +213,56 @@ class ChatService:
             {"role": message.role, "content": message.content}
             for message in self.repository.messages(session_id)
             if message.role in {"user", "assistant"}
-        ][-6:]
+        ][-HISTORY_LIMIT:]
         attachment_text = self.documents.context(session_id, request.doc_ids)
-        search, policies, conditions = self._search(request)
+
+        # 1) 이전에 쌓인 조건과 직전에 안내한 정책을 불러온다.
+        stored_profile = self.repository.session_profile(session_id)
+        recent_sources = self.repository.recent_sources(session_id)
+
+        # 2) 검색 전에 "이 입력이 무엇인지" 를 AI 에게 묻는다.
+        #    실패하면 ok=False 가 돌아오고, 아래에서 전부 search 로 처리된다.
+        reading = self._require_ai().interpret(
+            request.question,
+            history=history,
+            recent_policies=[
+                {"plcy_no": source.plcy_no, "title": source.title}
+                for source in recent_sources
+            ],
+            profile=stored_profile,
+        )
+        interpreted = bool(reading.get("ok"))
+        intent = str(reading.get("intent") or INTENT_SEARCH)
+        if not interpreted:
+            intent = INTENT_SEARCH
+        standalone = str(reading.get("standalone_question") or "") or request.question
+
+        # 3) 조건을 병합한다. 나중 값이 이긴다.
+        #    저장된 조건 -> 이번 문장에서 읽어낸 조건 -> 사이드바에서 직접 고른 값
+        merged = _merge_profiles(
+            stored_profile,
+            reading.get("conditions") if interpreted else None,
+            (request.profile or UserProfile()).model_dump(),
+        )
+        if merged != stored_profile:
+            self.repository.save_session_profile(session_id, merged)
+        profile = UserProfile(**merged)
+
+        # 4) 의도에 따라 갈라진다.
+        if intent == INTENT_CHAT:
+            search, policies = self._empty_result(), []
+            conditions = dict(merged)
+        elif intent == INTENT_FOLLOW_UP:
+            search, policies = self._follow_up(
+                [str(item) for item in (reading.get("policy_ids") or [])]
+            )
+            conditions = dict(merged)
+            if not policies:
+                # 지목한 정책을 못 찾으면 평소대로 검색한다.
+                intent = INTENT_SEARCH
+        if intent == INTENT_SEARCH:
+            search, policies, conditions = self._search(request, profile, standalone)
+
         self.repository.add_message(session_id, "user", request.question)
         return PreparedAnswer(
             request=request,
@@ -153,6 +272,10 @@ class ChatService:
             history=history,
             session_id=session_id,
             attachment_text=attachment_text,
+            intent=intent,
+            interpreted=interpreted,
+            standalone_question=standalone,
+            profile=merged,
         )
 
     @staticmethod
@@ -185,6 +308,8 @@ class ChatService:
         policies = list(prepared.policies)
         if prepared.attachment_text:
             policies.insert(0, self._attachment_policy(prepared.attachment_text))
+        # 일반 대화면 policies 가 비어 있다. 생성기는 "근거 자료 없음" 으로 보고
+        # SYSTEM_PROMPT 의 [일반 대화] 규칙에 따라 답한다.
         yield from self._require_ai().stream_generate(
             prepared.request.question,
             prepared.conditions,
@@ -192,31 +317,36 @@ class ChatService:
             prepared.history,
         )
 
-    def ask(self, request: AskRequest) -> AskResponse:
-        started = perf_counter()
-        prepared = self._prepare(request)
-        self._ensure_generator(prepared)
-        answer = "".join(self._tokens(prepared))
-        response = AskResponse(
+    def build_response(self, prepared: PreparedAnswer, answer: str, elapsed_ms: int) -> AskResponse:
+        return AskResponse(
             answer=answer,
             sources=prepared.search.sources,
             matched_policies=prepared.search.matched_policies,
             session_id=prepared.session_id,
-            elapsed_ms=int((perf_counter() - started) * 1000),
+            elapsed_ms=elapsed_ms,
             matched=prepared.search.matched,
             total=prepared.search.total,
             relevant=prepared.has_evidence,
             generated=prepared.has_evidence,
             used_attachments=bool(prepared.attachment_text),
+            intent=prepared.intent,
+            interpreted=prepared.interpreted,
+        )
+
+    def ask(self, request: AskRequest) -> AskResponse:
+        started = perf_counter()
+        prepared = self._prepare(request)
+        self._ensure_generator(prepared)
+        answer = "".join(self._tokens(prepared))
+        response = self.build_response(
+            prepared, answer, int((perf_counter() - started) * 1000)
         )
         self.repository.add_message(
             prepared.session_id, "assistant", answer, prepared.search.sources
         )
         return response
 
-    def stream(
-        self, request: AskRequest
-    ) -> tuple[Iterator[str], SearchResult, str, bool, bool]:
+    def stream(self, request: AskRequest) -> tuple[Iterator[str], PreparedAnswer]:
         prepared = self._prepare(request)
         # StreamingResponse가 시작된 뒤 실패하면 HTTP 상태를 503으로 바꿀 수 없다.
         # 생성기 준비 여부는 반드시 첫 SSE 바이트를 보내기 전에 검사한다.
@@ -234,13 +364,7 @@ class ChatService:
                 prepared.search.sources,
             )
 
-        return (
-            tokens(),
-            prepared.search,
-            prepared.session_id,
-            bool(prepared.attachment_text),
-            prepared.has_evidence,
-        )
+        return tokens(), prepared
 
     def eligibility(self, profile: UserProfile) -> EligibilityResponse:
         """모델이 필요 없는 순수 판정. AI 컨테이너가 꺼져 있어도 동작한다."""
