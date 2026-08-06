@@ -28,9 +28,13 @@ COPY src/rag/core/__init__.py \
      src/rag/core/data_loader.py \
      ./src/rag/core/
 
+# policy_summaries.json 은 긴 정책 설명을 미리 줄여 둔 파일이다
+# (python -m src.ingest.build_summaries 로 만든다).
+# 없어도 앱은 뜨지만 카드 설명이 원문 그대로 나와 잘려 보인다.
 COPY data/policies_structured.json \
      data/code_definitions.json \
      data/provinces.geojson \
+     data/policy_summaries.json \
      ./data/
 
 # SQLite 를 볼륨에 두어 컨테이너를 지워도 대화 이력이 남게 한다.

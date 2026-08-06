@@ -8,8 +8,8 @@
 #   cp .env.example .env      # UPSTAGE_API_KEY, VITE_KAKAO_MAP_KEY 입력
 #   docker compose up --build
 #
-# 첫 빌드는 10~20분 걸린다(torch 설치 + 임베딩 모델 2GB 다운로드).
-# 모델은 hf-models 볼륨에 캐시되므로 두 번째부터는 훨씬 빠르다.
+# 첫 이미지 빌드는 torch 설치 때문에 오래 걸릴 수 있다. 임베딩 모델 2GB는
+# build가 아니라 ai 컨테이너의 첫 기동 때 받고, hf-models 볼륨에 캐시한다.
 
 services:
   ai:

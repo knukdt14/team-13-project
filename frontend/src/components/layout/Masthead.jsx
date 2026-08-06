@@ -1,8 +1,14 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import useCountUp from '../../hooks/useCountUp'
+import PolicyRanking from './PolicyRanking'
 
-const EXAMPLES = ['월세 지원', '창업 지원금', '자격증 응시료']
+const RECOMMENDED_QUESTIONS = [
+  '대구에서 받을 수 있는 월세 지원이 있어?',
+  '취업 준비 중인데 받을 수 있는 지원금은?',
+  '자격증 시험비를 지원하는 정책을 찾아줘',
+  '신청 마감이 가까운 정책부터 보여줘',
+]
 
 function tiltPreview(event) {
   if (event.pointerType === 'touch') return
@@ -64,27 +70,28 @@ export default function Masthead({ total, isHome = false }) {
               aria-label="정책 상담 질문"
             />
             <button className="hero-ask-send" type="submit">
-              물어보기<span aria-hidden="true"> →</span>
+              정책 찾기
             </button>
           </form>
 
-          <p className="hero-ask-examples">
-            <span>이런 걸 물어보세요</span>
-            {EXAMPLES.map((example) => (
-              <button key={example} type="button" onClick={() => ask(example)}>{example}</button>
-            ))}
-          </p>
-        </div>
-        <div className="hero-preview" aria-hidden="true" onPointerMove={tiltPreview} onPointerLeave={resetPreview}>
-          <div className="preview-question">나도 받을 수 있는 지원이 있을까?</div>
-          <div className="preview-reply">
-            <div className="preview-thinking"><span className="dots"><i /><i /><i /></span></div>
-            <div className="preview-answer">
-              <span className="preview-spark">✦</span>
-              <div><strong>딱 맞는 정책부터 찾아볼게요</strong><p>조건을 넣을수록 더 정확해져요</p><div className="preview-tags"><span>일자리</span><span>주거</span><span>교육</span></div></div>
-            </div>
+          <div className="hero-suggestions">
+            <p>이렇게 물어보세요</p>
+            <ul>{RECOMMENDED_QUESTIONS.map((item) => <li key={item}><button type="button" onClick={() => ask(item)}>{item}</button></li>)}</ul>
           </div>
-          <div className="preview-stat"><span>모아본 청년정책</span><strong>{(counted ?? 0).toLocaleString()}<small>건</small></strong></div>
+        </div>
+        <div className="hero-showcase">
+          <div className="hero-preview" aria-hidden="true" onPointerMove={tiltPreview} onPointerLeave={resetPreview}>
+            <div className="preview-question">나도 받을 수 있는 지원이 있을까?</div>
+            <div className="preview-reply">
+              <div className="preview-thinking"><span className="dots"><i /><i /><i /></span></div>
+              <div className="preview-answer">
+                <span className="preview-spark">✦</span>
+                <div><strong>딱 맞는 정책부터 찾아볼게요</strong><p>조건을 넣을수록 더 정확해져요</p><div className="preview-tags"><span>일자리</span><span>주거</span><span>교육</span></div></div>
+              </div>
+            </div>
+            <div className="preview-stat"><span>모아본 청년정책</span><strong>{(counted ?? 0).toLocaleString()}<small>건</small></strong></div>
+          </div>
+          <div className="hero-ranking"><PolicyRanking onPick={(title) => navigate(`/documents?q=${encodeURIComponent(title)}`)} /></div>
         </div>
       </div>}
     </header>

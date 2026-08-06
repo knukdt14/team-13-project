@@ -22,6 +22,18 @@ export default function PolicyCard({ policy }) {
     <p className="policy-org">{policy.organization}</p>
     {policy.summary && <p className="policy-summary">{policy.summary}</p>}
     <ul className="tags"><Tag text={policy.age_label} />{policy.regions?.map((value) => <Tag key={value} text={value} />)}{policy.jobs?.map((value) => <Tag key={value} text={value} open={value === '제한없음'} />)}</ul>
+    {/* 기관이 공고에 적어 둔 문구 그대로다. 요약하거나 만들어내지 않는다.
+        서류를 잘못 안내하면 사용자가 헛걸음한다.
+        원문은 줄바꿈이 눌려 한 문단으로 오므로 백엔드가 항목별로 잘라 준다. */}
+    {policy.documents?.length > 0 && <details className="policy-docs">
+      <summary>준비 서류{policy.documents.length > 1 ? ` ${policy.documents.length}가지` : ''}</summary>
+      <div className="policy-docs-body">
+        {policy.documents.length > 1
+          ? <ul>{policy.documents.map((item, index) => <li key={index}>{item}</li>)}</ul>
+          : <p>{policy.documents[0]}</p>}
+      </div>
+      <p className="policy-docs-note">공고에 적힌 내용이에요. 신청 전에 기관 공고문을 꼭 확인해주세요.</p>
+    </details>}
     <p className="policy-period">{policy.period_label}</p>
   </li>
 }

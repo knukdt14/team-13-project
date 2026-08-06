@@ -25,7 +25,7 @@ def policies(
     include_closed: bool = False,
     include_nationwide: bool = False,
     direct_apply_only: bool = False,
-    sort: Literal["default", "deadline"] = "default",
+    sort: Literal["default", "deadline", "popular"] = "default",
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
 ) -> PolicyListResponse:

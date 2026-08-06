@@ -15,7 +15,13 @@ function ApplyCard({ policy }) {
   const deadline = policy.days_left == null ? '상시·기간 확인' : policy.days_left === 0 ? '오늘 마감' : `D-${policy.days_left}`
   return <article className={`apply-card tone-${toneOf(category)}`}>
     <div className="apply-card-top"><span className="policy-category">{category}</span><span className="apply-deadline">{deadline}</span></div>
-    <div className="apply-card-copy"><h3>{policy.title}</h3><p className="apply-organization">{policy.organization}</p></div>
+    <div className="apply-card-copy">
+      <h3>{policy.title}</h3>
+      <p className="apply-organization">{policy.organization}</p>
+      {/* 목록 화면에는 있는데 여기만 빠져 있었다. 기관명이 부서명뿐인 정책이
+          많아서, 설명이 없으면 무슨 정책인지 알 수 없다. */}
+      {policy.summary && <p className="apply-summary">{policy.summary}</p>}
+    </div>
     <div className="apply-card-conditions"><span>{policy.age_label}</span>{policy.regions?.slice(0, 2).map((region) => <span key={region}>{region}</span>)}<span>{policy.period_label}</span></div>
     <div className="apply-card-links">
       {policy.reference_url && policy.reference_url !== policy.application_url && <a className="apply-reference" href={policy.reference_url} target="_blank" rel="noreferrer">공고 먼저 보기</a>}

@@ -1,0 +1,47 @@
+{
+  "name": "청년정책도우미",
+
+  // Docker 이미지를 코드스페이스 안에서 빌드하지 않는다. 무료 티어는 2코어라
+  // 세 이미지를 빌드하면 20분 넘게 걸린다. 개발·시연은 세 서비스를 직접
+  // 띄우는 편이 빠르다. 컨테이너 구성을 보여줘야 할 때만 docker compose 를 쓴다.
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    // docker compose 를 코드스페이스 안에서 돌리기 위해 필요하다.
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  "forwardPorts": [5173, 8000, 9000],
+
+  "portsAttributes": {
+    "5173": {
+      "label": "웹 (여기로 접속)",
+      "onAutoForward": "openBrowser"
+    },
+    "8000": { "label": "백엔드 API" },
+    "9000": { "label": "AI 서비스" }
+  },
+
+  // 의존성만 미리 깔아 둔다. 서버 기동은 사람이 한다.
+  // AI 서비스는 임베딩 모델을 받느라 첫 실행에 몇 분 걸린다.
+  "postCreateCommand": "pip install -r requirements.txt && cd frontend && npm install",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  },
+
+  "remoteEnv": {
+    // 코드스페이스에는 GPU 가 없다. auto 로 둬도 src/rag/core/device.py 가
+    // CPU 로 떨어지므로 동작에는 문제가 없지만, 여기서 명시해 두면 실행 장치를
+    // 로그가 아니라 설정만 보고 알 수 있다.
+    // fp16 은 CPU 에서 오히려 느리므로 끈다.
+    "EMBEDDING_DEVICE": "cpu",
+    "EMBEDDING_USE_FP16": "false"
+  }
+}
