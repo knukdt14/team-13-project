@@ -48,6 +48,7 @@ INTERPRET_SYSTEM_PROMPT = """당신은 대한민국 청년정책 챗봇의 대�
 {
   "intent": "chat 또는 search 또는 follow_up",
   "standalone_question": "이전 대화를 모르는 사람도 이해할 수 있는 완전한 질문",
+  "wants_more": false,
   "policy_ids": [],
   "conditions": {"age": null, "region": null, "employment": null, "education": null, "income_bracket": null}
 }
@@ -61,13 +62,25 @@ INTERPRET_SYSTEM_PROMPT = """당신은 대한민국 청년정책 챗봇의 대�
 [standalone_question]
 - 지시 표현("그중", "3번", "그 정책")을 실제 정책명으로 바꾼 문장으로 쓰세요.
 - intent 가 chat 이면 현재 입력을 그대로 쓰세요.
+- "다른 거 없어?" 처럼 내용이 없는 입력은, 직전 질문의 주제를 살려서
+  완전한 문장으로 만드세요.
+  예) 직전이 "취업 지원금 알려줘" 였다면 "취업 지원금을 더 알려주세요"
+
+[wants_more]
+- 앞서 안내한 것 말고 **다른 정책을 더 보여 달라**는 뜻이면 true 로 하세요.
+  예) "다른 건 없어?", "더 없어?", "또 뭐 있어?", "다른 것도 보여줘"
+- 새로운 주제를 묻거나 첫 질문이면 false 입니다.
+- intent 가 chat 이나 follow_up 이면 false 입니다.
 
 [policy_ids]
 - follow_up 일 때만 [직전에 안내한 정책] 목록에 있는 실제 ID 를 넣으세요.
 - 가리키는 정책이 목록에 없으면 intent 를 search 로 하고 빈 배열을 쓰세요.
 
 [conditions]
-- 현재 입력에서 새로 확인된 값만 채우고 나머지는 null 로 두세요.
+- **사용자가 현재 입력에서 직접 말한 값만** 채우고 나머지는 null 로 두세요.
+- 이전 답변에 나온 정책명이나 기관명에서 조건을 만들어 내지 마세요.
+  예) 직전 답변에 "울산 동구 취업 특강"이 있어도, 사용자가 "다른건 없어?"
+      라고만 했다면 region 은 null 입니다. 사용자는 울산을 말한 적이 없습니다.
 - 부정하는 표현은 조건이 아닙니다. "울산에 살지 않아요" 는 region 을 null 로 두세요.
 - "울산 말고", "서울은 빼고" 같은 제외 표현도 조건으로 넣지 마세요.
 - age 와 income_bracket 은 숫자, 나머지는 문자열입니다. 모르면 null 입니다.
@@ -80,6 +93,9 @@ class Interpretation:
 
     intent: str = INTENT_SEARCH
     standalone_question: str = ""
+    # "다른 거 없어?" 처럼 앞서 안내한 것 말고 더 보여 달라는 요청인가.
+    # 참이면 이번 대화에서 이미 보여준 정책을 검색 결과에서 뺀다.
+    wants_more: bool = False
     policy_ids: list[str] = field(default_factory=list)
     conditions: dict[str, Any] = field(default_factory=dict)
     ok: bool = False
@@ -93,6 +109,7 @@ class Interpretation:
         return {
             "intent": self.intent,
             "standalone_question": self.standalone_question,
+            "wants_more": self.wants_more,
             "policy_ids": list(self.policy_ids),
             "conditions": dict(self.conditions),
             "ok": self.ok,
@@ -153,7 +170,27 @@ def _extract_json(raw: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _clean_conditions(value: Any) -> dict[str, Any]:
+def _mentioned_in(value: Any, question: str) -> bool:
+    """이 조건이 사용자의 현재 입력에서 나온 값인지 확인한다.
+
+    모델이 직전 **답변**에 나온 정책명에서 조건을 뽑아내는 일이 있다.
+    실제로 "다른건 없어?" 라는 입력에 대해, 직전 답변의 정책명
+    "울산 동구 취업 및 문화 특강"을 보고 region="울산 동구" 를 만들어 냈다.
+    사용자는 울산을 말한 적이 없는데 검색이 울산으로 좁혀진다.
+
+    프롬프트에 "현재 입력에서만" 이라고 적어 두었지만 지켜지지 않아
+    여기서 한 번 더 막는다. 값의 앞 두 글자가 입력에 없으면 버린다.
+    "서울시에 살아요" → "서울" 처럼 모델이 다듬은 표현은 통과한다.
+    """
+    text = str(value).strip()
+    if not text:
+        return False
+    if text.isdigit():
+        return text in question
+    return text[:2] in question
+
+
+def _clean_conditions(value: Any, question: str = "") -> dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
     cleaned: dict[str, Any] = {}
@@ -163,11 +200,17 @@ def _clean_conditions(value: Any) -> dict[str, Any]:
             continue
         if key in {"age", "income_bracket"}:
             try:
-                cleaned[key] = int(item)
+                number = int(item)
             except (TypeError, ValueError):
                 continue
+            if question and not _mentioned_in(number, question):
+                continue
+            cleaned[key] = number
         else:
-            cleaned[key] = str(item).strip()
+            text = str(item).strip()
+            if question and not _mentioned_in(text, question):
+                continue
+            cleaned[key] = text
     return cleaned
 
 
@@ -199,11 +242,15 @@ def parse_interpretation(
     if intent == INTENT_FOLLOW_UP and not policy_ids:
         intent = INTENT_SEARCH
 
+    # 검색일 때만 의미가 있다. chat 이나 follow_up 에서 참이면 무시한다.
+    wants_more = bool(parsed.get("wants_more")) and intent == INTENT_SEARCH
+
     return Interpretation(
         intent=intent,
         standalone_question=standalone,
+        wants_more=wants_more,
         policy_ids=policy_ids,
-        conditions=_clean_conditions(parsed.get("conditions")),
+        conditions=_clean_conditions(parsed.get("conditions"), question),
         ok=True,
     )
 

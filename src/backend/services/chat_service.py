@@ -26,7 +26,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from functools import lru_cache
 from time import perf_counter
-from typing import Any
+from typing import Any, Sequence
 
 from src.backend.db.repository import Repository
 from src.backend.errors import RAGUnavailableError
@@ -57,6 +57,10 @@ INTENT_FOLLOW_UP = "follow_up"
 PROFILE_KEYS = ("age", "region", "employment", "education", "income_bracket")
 
 HISTORY_LIMIT = 6
+
+# "다른 거 없어?" 일 때 후보를 얼마나 깊게 뽑을지. 5개씩 열 번까지 새로운
+# 정책을 보여줄 수 있는 깊이다. 더 내려가면 질문과 관련이 옅어진다.
+MORE_SEARCH_TOP_K = 50
 
 
 @lru_cache(maxsize=1)
@@ -164,6 +168,7 @@ class ChatService:
         request: AskRequest,
         profile: UserProfile,
         question: str,
+        exclude_policy_ids: Sequence[str] = (),
     ) -> tuple[SearchResult, list[dict[str, Any]], dict[str, Any]]:
         filters = profile_filters(profile)
         # 정책 원본은 백엔드도 갖고 있다. AI 응답에는 policy_id 만 오므로
@@ -177,6 +182,11 @@ class ChatService:
         exclude_nationwide = bool(profile.region and not request.include_nationwide)
         if exclude_nationwide:
             search_top_k = max(request.top_k * 5, 25)
+        # "다른 거 없어?" 일 때는 이미 안내한 정책이 빠진 뒤에도 top_k 를 채울
+        # 만큼 넉넉히 뽑아야 한다. 50 이면 5개씩 열 번까지 새로 보여줄 수 있다.
+        # 그보다 뒤로 가면 질문과 관련이 옅어져 억지로 채우는 것이 된다.
+        if exclude_policy_ids:
+            search_top_k = max(search_top_k, MORE_SEARCH_TOP_K)
 
         raw = self._require_ai().search(
             question,
@@ -184,6 +194,7 @@ class ChatService:
             filters=filters or None,
             include_closed=request.include_closed,
             mode=request.mode.value,
+            exclude_policy_ids=exclude_policy_ids,
         )
         policies = list(raw.get("policies") or [])
         if exclude_nationwide:
@@ -261,7 +272,16 @@ class ChatService:
                 # 지목한 정책을 못 찾으면 평소대로 검색한다.
                 intent = INTENT_SEARCH
         if intent == INTENT_SEARCH:
-            search, policies, conditions = self._search(request, profile, standalone)
+            # "다른 거 없어?" 면 이번 대화에서 이미 안내한 정책을 뺀다.
+            # 그러지 않으면 같은 질문·같은 조건이라 상위 정책이 또 1등을 한다.
+            already_shown = (
+                self.repository.shown_policy_ids(session_id)
+                if interpreted and reading.get("wants_more")
+                else []
+            )
+            search, policies, conditions = self._search(
+                request, profile, standalone, already_shown
+            )
 
         self.repository.add_message(session_id, "user", request.question)
         return PreparedAnswer(
